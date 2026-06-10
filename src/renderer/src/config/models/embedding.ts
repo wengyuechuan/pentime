@@ -7,7 +7,7 @@ export const EMBEDDING_REGEX =
 
 // Rerank models
 export const RERANKING_REGEX = /(?:rerank|re-rank|re-ranker|re-ranking|retrieval|retriever)/i
-export function isEmbeddingModel(model: Model): boolean {
+export function isEmbeddingModel(model: Model | undefined | null): boolean {
   if (!model || isRerankModel(model)) {
     return false
   }
@@ -29,7 +29,11 @@ export function isEmbeddingModel(model: Model): boolean {
   return EMBEDDING_REGEX.test(modelId) || false
 }
 
-export function isRerankModel(model: Model): boolean {
+export function isRerankModel(model: Model | undefined | null): boolean {
+  if (!model) {
+    return false
+  }
+
   if (isUserSelectedModelType(model, 'rerank') !== undefined) {
     return isUserSelectedModelType(model, 'rerank')!
   }

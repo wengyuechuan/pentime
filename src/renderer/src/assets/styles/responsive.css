@@ -18,8 +18,8 @@
 /* lg */
 @media (max-width: 1080px) {
   :root {
-    --assistants-width: 210px;
-    --topic-list-width: 210px;
+    --assistants-width: 240px;
+    --topic-list-width: 240px;
     --settings-width: 210px;
   }
 }

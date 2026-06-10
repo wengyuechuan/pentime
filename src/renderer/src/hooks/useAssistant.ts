@@ -74,15 +74,20 @@ export function useAssistants() {
 }
 
 export function useAssistant(id: string) {
-  const assistant = useAppSelector((state) => state.assistants.assistants.find((a) => a.id === id) as Assistant)
+  const assistant = useAppSelector(
+    (state) => (state.assistants.assistants.find((a) => a.id === id) || state.assistants.defaultAssistant) as Assistant
+  )
   const dispatch = useAppDispatch()
   const { defaultModel } = useDefaultModel()
 
   const model = useMemo(() => assistant?.model ?? assistant?.defaultModel ?? defaultModel, [assistant, defaultModel])
 
   const normalizedTopics = useMemo(
-    () => (Array.isArray(assistant?.topics) ? assistant.topics : []),
-    [assistant?.topics]
+    () =>
+      Array.isArray(assistant?.topics) && assistant.topics.length > 0
+        ? assistant.topics
+        : [getDefaultTopic(assistant.id)],
+    [assistant?.id, assistant?.topics]
   )
   const assistantWithModel = useMemo(
     () => ({ ...assistant, model, topics: normalizedTopics }),

@@ -136,7 +136,7 @@ export function isTemperatureTopPMutuallyExclusiveModel(model: Model | undefined
   return isClaude45ReasoningModel(model)
 }
 
-export function isGemmaModel(model?: Model): boolean {
+export function isGemmaModel(model?: Model | null): boolean {
   if (!model) {
     return false
   }
@@ -145,12 +145,20 @@ export function isGemmaModel(model?: Model): boolean {
   return modelId.includes('gemma-') || modelId.includes('gemma4') || model.group === 'Gemma'
 }
 
-export function isZhipuModel(model: Model): boolean {
+export function isZhipuModel(model: Model | undefined | null): boolean {
+  if (!model) {
+    return false
+  }
+
   const modelId = getLowerBaseModelName(model.id)
   return modelId.includes('glm') || model.provider === SystemProviderIds.zhipu
 }
 
-export function isMoonshotModel(model: Model): boolean {
+export function isMoonshotModel(model: Model | undefined | null): boolean {
+  if (!model) {
+    return false
+  }
+
   const modelId = getLowerBaseModelName(model.id)
   return ['moonshot', 'kimi'].some((m) => modelId.includes(m))
 }
@@ -220,12 +228,20 @@ export const isDeepSeekModel = (model?: Model): boolean => {
 
 const NOT_SUPPORT_TEXT_DELTA_MODEL_REGEX = new RegExp('qwen-mt-(?:turbo|plus)')
 
-export const isNotSupportTextDeltaModel = (model: Model): boolean => {
+export const isNotSupportTextDeltaModel = (model: Model | undefined | null): boolean => {
+  if (!model) {
+    return false
+  }
+
   const modelId = getLowerBaseModelName(model.id)
   return NOT_SUPPORT_TEXT_DELTA_MODEL_REGEX.test(modelId)
 }
 
-export const isNotSupportSystemMessageModel = (model: Model): boolean => {
+export const isNotSupportSystemMessageModel = (model: Model | undefined | null): boolean => {
+  if (!model) {
+    return false
+  }
+
   return isQwenMTModel(model) || isGemmaModel(model)
 }
 
@@ -297,12 +313,20 @@ export const getModelSupportedVerbosity = (model: Model | undefined | null): Ope
   return [undefined, ...supportedValues]
 }
 
-export const isGeminiModel = (model: Model) => {
+export const isGeminiModel = (model: Model | undefined | null) => {
+  if (!model) {
+    return false
+  }
+
   const modelId = getLowerBaseModelName(model.id)
   return modelId.includes('gemini')
 }
 
-export const isGrokModel = (model: Model) => {
+export const isGrokModel = (model: Model | undefined | null) => {
+  if (!model) {
+    return false
+  }
+
   const modelId = getLowerBaseModelName(model.id)
   return modelId.includes('grok')
 }
@@ -310,11 +334,15 @@ export const isGrokModel = (model: Model) => {
 // zhipu 视觉推理模型用这组 special token 标记推理结果
 export const ZHIPU_RESULT_TOKENS = ['<|begin_of_box|>', '<|end_of_box|>'] as const
 
-export const agentModelFilter = (model: Model): boolean => {
+export const agentModelFilter = (model: Model | undefined | null): boolean => {
   return !isEmbeddingModel(model) && !isRerankModel(model) && !isTextToImageModel(model)
 }
 
-export const isMaxTemperatureOneModel = (model: Model): boolean => {
+export const isMaxTemperatureOneModel = (model: Model | undefined | null): boolean => {
+  if (!model) {
+    return false
+  }
+
   if (isZhipuModel(model) || isAnthropicModel(model) || isMoonshotModel(model)) {
     return true
   }
@@ -327,13 +355,21 @@ export const isMaxTemperatureOneModel = (model: Model): boolean => {
 // gates, reasoning behavior, and sampling-parameter filtering all depend on this helper.
 // If upstream repoints either alias to a non-3.x model, revisit this check and the
 // related Gemini UI / reasoning / sampling tests before updating the mapping.
-export const isGemini3Model = (model: Model) => {
+export const isGemini3Model = (model: Model | undefined | null) => {
+  if (!model) {
+    return false
+  }
+
   const modelId = getLowerBaseModelName(model.id)
   return modelId.includes('gemini-3') || modelId === 'gemini-flash-latest' || modelId === 'gemini-pro-latest'
 }
 
 // major version, including 3.x aliases
-export const isGemini3ThinkingTokenModel = (model: Model) => {
+export const isGemini3ThinkingTokenModel = (model: Model | undefined | null) => {
+  if (!model) {
+    return false
+  }
+
   const modelId = getLowerBaseModelName(model.id)
   return isGemini3Model(model) && !modelId.includes('image')
 }

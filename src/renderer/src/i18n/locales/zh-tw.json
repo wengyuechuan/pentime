@@ -6058,7 +6058,7 @@
     "duration": "時間",
     "empty_description": "填寫提示詞並產生後，影片會在這裡播放。",
     "empty_title": "等待產生影片",
-    "enhance_prompt": "提示詞優化",
+    "enhance_prompt": "Optimize",
     "error": {
       "cancelled": "已取消產生",
       "create_failed": "建立影片任務失敗",

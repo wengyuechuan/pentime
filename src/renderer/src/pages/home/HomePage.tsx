@@ -1,9 +1,10 @@
 import { ErrorBoundary } from '@renderer/components/ErrorBoundary'
-import { useAssistants } from '@renderer/hooks/useAssistant'
+import { useAssistants, useDefaultAssistant } from '@renderer/hooks/useAssistant'
 import { useNavbarPosition, useSettings } from '@renderer/hooks/useSettings'
 import { useShortcut } from '@renderer/hooks/useShortcuts'
 import { useShowAssistants, useShowTopics } from '@renderer/hooks/useStore'
 import { useActiveTopic } from '@renderer/hooks/useTopic'
+import { getDefaultTopic } from '@renderer/services/AssistantService'
 import { EVENT_NAMES, EventEmitter } from '@renderer/services/EventService'
 import NavigationService from '@renderer/services/NavigationService'
 import { newMessagesActions } from '@renderer/store/newMessage'
@@ -11,7 +12,7 @@ import type { Assistant, Topic } from '@renderer/types'
 import { MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, SECOND_MIN_WINDOW_WIDTH } from '@shared/config/constant'
 import { AnimatePresence, motion } from 'motion/react'
 import type { FC } from 'react'
-import { startTransition, useCallback, useEffect, useState } from 'react'
+import { startTransition, useCallback, useEffect, useMemo, useState } from 'react'
 import { useDispatch } from 'react-redux'
 import { useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
@@ -24,22 +25,50 @@ let _activeAssistant: Assistant
 
 const HomePage: FC = () => {
   const { assistants } = useAssistants()
+  const { defaultAssistant } = useDefaultAssistant()
   const navigate = useNavigate()
   const { isLeftNavbar } = useNavbarPosition()
 
   const location = useLocation()
   const state = location.state
 
-  const [activeAssistant, _setActiveAssistant] = useState<Assistant>(
-    state?.assistant || _activeAssistant || assistants[0]
+  const normalizeAssistant = useCallback(
+    (assistant?: Assistant): Assistant => {
+      const nextAssistant = assistant || defaultAssistant
+      const topics =
+        Array.isArray(nextAssistant.topics) && nextAssistant.topics.length > 0
+          ? nextAssistant.topics
+          : [getDefaultTopic(nextAssistant.id)]
+
+      return topics === nextAssistant.topics ? nextAssistant : { ...nextAssistant, topics }
+    },
+    [defaultAssistant]
   )
-  const { activeTopic, setActiveTopic: _setActiveTopic } = useActiveTopic(activeAssistant?.id ?? '', state?.topic)
+
+  const [activeAssistant, _setActiveAssistant] = useState<Assistant>(() =>
+    normalizeAssistant(state?.assistant || _activeAssistant || assistants[0])
+  )
+  const safeActiveAssistant = useMemo(
+    () => normalizeAssistant(activeAssistant || _activeAssistant || assistants[0]),
+    [activeAssistant, assistants, normalizeAssistant]
+  )
+  const { activeTopic, setActiveTopic: _setActiveTopic } = useActiveTopic(
+    safeActiveAssistant.id,
+    state?.topic || safeActiveAssistant.topics[0]
+  )
+  const safeActiveTopic = useMemo(
+    () =>
+      safeActiveAssistant.topics.find((topic) => topic.id === activeTopic?.id) ||
+      safeActiveAssistant.topics[0] ||
+      getDefaultTopic(safeActiveAssistant.id),
+    [activeTopic, safeActiveAssistant]
+  )
   const { showAssistants, showTopics, topicPosition } = useSettings()
   const { setShowAssistants, toggleShowAssistants } = useShowAssistants()
   const { toggleShowTopics } = useShowTopics()
   const dispatch = useDispatch()
 
-  _activeAssistant = activeAssistant
+  _activeAssistant = safeActiveAssistant
 
   useShortcut('toggle_show_assistants', () => {
     if (topicPosition === 'right') {
@@ -77,21 +106,23 @@ const HomePage: FC = () => {
 
   const setActiveAssistant = useCallback(
     (newAssistant: Assistant) => {
-      if (newAssistant.id === activeAssistant?.id) return
+      const normalizedAssistant = normalizeAssistant(newAssistant)
+      if (normalizedAssistant.id === safeActiveAssistant.id) return
       startTransition(() => {
-        _setActiveAssistant(newAssistant)
+        _setActiveAssistant(normalizedAssistant)
         // 同步更新 active topic，避免不必要的重新渲染
-        const newTopic = newAssistant.topics[0]
-        _setActiveTopic((prev) => (newTopic?.id === prev.id ? prev : newTopic))
+        const newTopic = normalizedAssistant.topics[0] || getDefaultTopic(normalizedAssistant.id)
+        _setActiveTopic((prev) => (newTopic?.id === prev?.id ? prev : newTopic))
       })
     },
-    [_setActiveTopic, activeAssistant?.id]
+    [_setActiveTopic, normalizeAssistant, safeActiveAssistant.id]
   )
 
   const setActiveTopic = useCallback(
     (newTopic: Topic) => {
+      if (!newTopic?.id) return
       startTransition(() => {
-        _setActiveTopic((prev) => (newTopic?.id === prev.id ? prev : newTopic))
+        _setActiveTopic((prev) => (newTopic?.id === prev?.id ? prev : newTopic))
         dispatch(newMessagesActions.setTopicFulfilled({ topicId: newTopic.id, fulfilled: false }))
       })
     },
@@ -121,8 +152,8 @@ const HomePage: FC = () => {
     <Container id="home-page">
       {isLeftNavbar && (
         <Navbar
-          activeAssistant={activeAssistant}
-          activeTopic={activeTopic}
+          activeAssistant={safeActiveAssistant}
+          activeTopic={safeActiveTopic}
           setActiveTopic={setActiveTopic}
           setActiveAssistant={setActiveAssistant}
           position="left"
@@ -139,8 +170,8 @@ const HomePage: FC = () => {
                 transition={{ duration: 0.3, ease: 'easeInOut' }}
                 style={{ overflow: 'hidden' }}>
                 <HomeTabs
-                  activeAssistant={activeAssistant}
-                  activeTopic={activeTopic}
+                  activeAssistant={safeActiveAssistant}
+                  activeTopic={safeActiveTopic}
                   setActiveAssistant={setActiveAssistant}
                   setActiveTopic={setActiveTopic}
                   position="left"
@@ -151,8 +182,8 @@ const HomePage: FC = () => {
         </AnimatePresence>
         <ErrorBoundary>
           <Chat
-            assistant={activeAssistant}
-            activeTopic={activeTopic}
+            assistant={safeActiveAssistant}
+            activeTopic={safeActiveTopic}
             setActiveTopic={setActiveTopic}
             setActiveAssistant={setActiveAssistant}
           />

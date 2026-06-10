@@ -136,6 +136,7 @@ const Container = styled.div`
   display: flex;
   flex-direction: column;
   width: var(--assistants-width);
+  min-width: var(--assistants-width);
   transition: width 0.3s;
   height: calc(100vh - var(--navbar-height));
   position: relative;
@@ -180,6 +181,7 @@ const CustomTabs = styled.div`
 
 const TabItem = styled.button<{ active: boolean }>`
   flex: 1;
+  min-width: 0;
   height: 30px;
   border: none;
   background: transparent;
@@ -193,6 +195,7 @@ const TabItem = styled.button<{ active: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
+  white-space: nowrap;
 
   &:hover {
     color: var(--color-text);

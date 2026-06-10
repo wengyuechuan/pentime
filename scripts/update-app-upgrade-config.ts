@@ -7,7 +7,7 @@ type UpdateMirror = 'github' | 'gitcode'
 
 const CHANNELS: UpgradeChannel[] = ['latest', 'rc', 'beta']
 const MIRRORS: UpdateMirror[] = ['github', 'gitcode']
-const SELF_HOSTED_RELEASE_BASE_URL = 'http://pentime-new.com/pen-time/releases'
+const SELF_HOSTED_RELEASE_BASE_URL = 'https://pentime-new.com/pen-time/releases'
 const DEFAULT_FEED_TEMPLATES: Record<UpdateMirror, string> = {
   github: `${SELF_HOSTED_RELEASE_BASE_URL}/{{tag}}`,
   gitcode: `${SELF_HOSTED_RELEASE_BASE_URL}/{{tag}}`

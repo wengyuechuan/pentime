@@ -1388,10 +1388,10 @@ const MainContainer = styled.div`
 const RightContainer = styled(Scrollbar)`
   display: flex;
   flex-direction: column;
-  width: 100px;
-  min-width: 100px;
-  max-width: 100px;
-  padding: 10px;
+  width: clamp(150px, 18vw, 220px);
+  min-width: 150px;
+  max-width: 220px;
+  padding: 12px;
   border-left: 0.5px solid var(--color-border);
 `
 
@@ -1422,7 +1422,12 @@ const SwitchRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  min-height: 38px;
+  margin-top: 6px;
+  margin-bottom: 16px;
+  padding-top: 8px;
+  font-size: 15px;
+  font-weight: 500;
   color: var(--color-text);
 `
 
@@ -1563,6 +1568,7 @@ const HistoryItem = styled.div<{ $active?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
   padding: 8px;
   border: 1px solid ${({ $active }) => ($active ? 'var(--color-primary)' : 'var(--color-border)')};
   border-radius: 8px;
@@ -1575,6 +1581,11 @@ const HistoryHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+
+  .ant-tag {
+    flex-shrink: 0;
+    margin-inline-end: 0;
+  }
 `
 
 const HistoryModel = styled.div`

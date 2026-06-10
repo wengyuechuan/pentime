@@ -1,7 +1,11 @@
 import type { Model } from '@renderer/types'
 import { getLowerBaseModelName } from '@renderer/utils'
 
-export const isQwenMTModel = (model: Model): boolean => {
+export const isQwenMTModel = (model?: Model | null): boolean => {
+  if (!model) {
+    return false
+  }
+
   const modelId = getLowerBaseModelName(model.id)
   return modelId.includes('qwen-mt')
 }

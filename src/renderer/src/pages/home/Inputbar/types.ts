@@ -60,7 +60,7 @@ export interface ToolDependencies {
 export interface ToolContext {
   scope: InputbarScope
   assistant: Assistant
-  model: Model
+  model?: Model
   // Session data for Agent Session scope (only available when scope is TopicType.Session)
   session?: {
     agentId?: string
@@ -215,8 +215,15 @@ export const getToolsForScope = (
     }
 
     // Check custom condition
-    if (tool.condition && !tool.condition(fullContext)) {
-      return false
+    if (tool.condition) {
+      try {
+        if (!tool.condition(fullContext)) {
+          return false
+        }
+      } catch (error) {
+        logger.warn(`Tool condition failed for "${tool.key}".`, error as Error)
+        return false
+      }
     }
 
     return true

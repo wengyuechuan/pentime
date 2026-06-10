@@ -36,7 +36,7 @@ export const PERPLEXITY_SEARCH_MODELS = [
   'sonar-deep-research'
 ]
 
-export function isWebSearchModel(model: Model): boolean {
+export function isWebSearchModel(model?: Model | null): boolean {
   if (!model || isEmbeddingModel(model) || isRerankModel(model) || isTextToImageModel(model)) {
     return false
   }
@@ -124,7 +124,7 @@ export function isWebSearchModel(model: Model): boolean {
   return false
 }
 
-export function isMandatoryWebSearchModel(model: Model): boolean {
+export function isMandatoryWebSearchModel(model?: Model | null): boolean {
   if (!model) {
     return false
   }
@@ -144,14 +144,14 @@ export function isMandatoryWebSearchModel(model: Model): boolean {
   return false
 }
 
-export function isOpenRouterBuiltInWebSearchModel(model: Model): boolean {
+export function isOpenRouterBuiltInWebSearchModel(model?: Model | null): boolean {
   if (!model) {
     return false
   }
 
   const provider = getProviderByModel(model)
 
-  if (provider.id !== 'openrouter') {
+  if (!provider || provider.id !== 'openrouter') {
     return false
   }
 
@@ -160,12 +160,20 @@ export function isOpenRouterBuiltInWebSearchModel(model: Model): boolean {
   return isOpenAIWebSearchChatCompletionOnlyModel(model) || modelId.includes('sonar')
 }
 
-export function isOpenAIWebSearchChatCompletionOnlyModel(model: Model): boolean {
+export function isOpenAIWebSearchChatCompletionOnlyModel(model?: Model | null): boolean {
+  if (!model) {
+    return false
+  }
+
   const modelId = getLowerBaseModelName(model.id)
   return modelId.includes('gpt-4o-search-preview') || modelId.includes('gpt-4o-mini-search-preview')
 }
 
-export function isOpenAIWebSearchModel(model: Model): boolean {
+export function isOpenAIWebSearchModel(model?: Model | null): boolean {
+  if (!model) {
+    return false
+  }
+
   const modelId = getLowerBaseModelName(model.id)
 
   return (
@@ -179,7 +187,7 @@ export function isOpenAIWebSearchModel(model: Model): boolean {
   )
 }
 
-export function isHunyuanSearchModel(model?: Model): boolean {
+export function isHunyuanSearchModel(model?: Model | null): boolean {
   if (!model) {
     return false
   }

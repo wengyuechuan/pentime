@@ -6,7 +6,7 @@
   "desktopName": "Pen-Time.desktop",
   "main": "./out/main/index.js",
   "author": "support@cherry-ai.com",
-  "homepage": "http://pentime-new.com",
+  "homepage": "https://pentime-new.com",
   "engines": {
     "node": ">=24.11.1"
   },

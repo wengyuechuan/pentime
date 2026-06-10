@@ -12,6 +12,10 @@ const GenerateImageTool = ({ context }) => {
     updateAssistant({ ...assistant, enableGenerateImage: !assistant.enableGenerateImage })
   }, [assistant, updateAssistant])
 
+  if (!model) {
+    return null
+  }
+
   return <GenerateImageButton assistant={assistant} model={model} onEnableGenerateImage={handleToggle} />
 }
 

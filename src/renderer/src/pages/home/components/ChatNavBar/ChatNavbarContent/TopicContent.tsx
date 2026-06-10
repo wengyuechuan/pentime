@@ -6,6 +6,7 @@ import { getLeadingEmoji } from '@renderer/utils'
 import { ChevronRight } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import styled from 'styled-components'
 
 import SelectModelButton from '../../SelectModelButton'
 import Tools from '../Tools'
@@ -19,8 +20,8 @@ const TopicContent = ({ assistant }: TopicContentProps) => {
   const assistantName = useMemo(() => assistant.name || t('chat.default.name'), [assistant.name, t])
 
   return (
-    <>
-      <HorizontalScrollContainer className="ml-2 flex-initial">
+    <ContentWrap>
+      <HorizontalScrollContainer className="ml-2 min-w-0 flex-auto shrink">
         <div className="flex flex-nowrap items-center gap-2">
           {/* Assistant Label */}
           <div
@@ -37,9 +38,27 @@ const TopicContent = ({ assistant }: TopicContentProps) => {
           <SelectModelButton assistant={assistant} />
         </div>
       </HorizontalScrollContainer>
-      <Tools assistant={assistant} />
-    </>
+      <ToolsWrap>
+        <Tools assistant={assistant} />
+      </ToolsWrap>
+    </ContentWrap>
   )
 }
+
+const ContentWrap = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+`
+
+const ToolsWrap = styled.div`
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding-left: 8px;
+`
 
 export default TopicContent

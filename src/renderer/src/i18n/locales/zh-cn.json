@@ -6058,7 +6058,7 @@
     "duration": "时间",
     "empty_description": "填写提示词并生成后，视频会在这里播放。",
     "empty_title": "等待生成视频",
-    "enhance_prompt": "提示词优化",
+    "enhance_prompt": "Optimize",
     "error": {
       "cancelled": "已取消生成",
       "create_failed": "创建视频任务失败",

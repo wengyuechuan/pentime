@@ -47,6 +47,11 @@ resources/binaries/
 
 # Local
 local
+.run/
+.tmp/
+.tools/
+dist-pentime-setup/
+deploy/pentime-updates/pen-time/releases/
 .aider*
 .cursorrules
 .cursor/*

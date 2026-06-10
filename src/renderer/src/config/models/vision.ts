@@ -177,7 +177,7 @@ const MODERN_GENERATE_IMAGE_MODELS_REGEX = new RegExp(MODERN_IMAGE_MODELS.join('
  * 1. Route to dedicated image generation API
  * 2. Exclude from reasoning/websearch/tooluse selection
  */
-export function isDedicatedImageModel(model: Model): boolean {
+export function isDedicatedImageModel(model?: Model | null): boolean {
   if (!model) return false
   const modelId = getLowerBaseModelName(model.id)
   return DEDICATED_IMAGE_MODEL_REGEX.test(modelId)
@@ -186,7 +186,7 @@ export function isDedicatedImageModel(model: Model): boolean {
 // Backward compatible aliases
 export const isDedicatedImageGenerationModel = isDedicatedImageModel
 
-export const isAutoEnableImageGenerationModel = (model: Model): boolean => {
+export const isAutoEnableImageGenerationModel = (model?: Model | null): boolean => {
   if (!model) return false
 
   const modelId = getLowerBaseModelName(model.id)
@@ -198,7 +198,7 @@ export const isAutoEnableImageGenerationModel = (model: Model): boolean => {
  * @param model
  * @returns
  */
-export function isGenerateImageModel(model: Model): boolean {
+export function isGenerateImageModel(model?: Model | null): boolean {
   if (!model || isEmbeddingModel(model) || isRerankModel(model)) {
     return false
   }
@@ -224,7 +224,11 @@ export function isGenerateImageModel(model: Model): boolean {
  * @param model
  * @returns
  */
-export function isPureGenerateImageModel(model: Model): boolean {
+export function isPureGenerateImageModel(model?: Model | null): boolean {
+  if (!model) {
+    return false
+  }
+
   if (!isGenerateImageModel(model) && !isTextToImageModel(model)) {
     return false
   }
@@ -248,12 +252,16 @@ export const isTextToImageModel = isDedicatedImageModel
  * 判断模型是否支持图片增强（包括编辑、增强、修复等）
  * @param model
  */
-export function isImageEnhancementModel(model: Model): boolean {
+export function isImageEnhancementModel(model?: Model | null): boolean {
+  if (!model) {
+    return false
+  }
+
   const modelId = getLowerBaseModelName(model.id)
   return IMAGE_ENHANCEMENT_MODELS_REGEX.test(modelId)
 }
 
-export function isVisionModel(model: Model): boolean {
+export function isVisionModel(model?: Model | null): boolean {
   if (!model || isEmbeddingModel(model) || isRerankModel(model)) {
     return false
   }
