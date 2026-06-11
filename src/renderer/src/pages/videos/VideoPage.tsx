@@ -450,6 +450,12 @@ const createVideoBlobUrl = (base64: string, mime: string) => {
   return URL.createObjectURL(new Blob([bytes], { type: mime }))
 }
 
+const createVideoObjectUrl = (blob: Blob, fallbackName?: string) => {
+  const mime = getVideoMimeType(fallbackName, blob.type)
+  const playableBlob = blob.type === mime ? blob : blob.slice(0, blob.size, mime)
+  return URL.createObjectURL(playableBlob)
+}
+
 const revokeVideoBlobUrl = (url?: string) => {
   if (url?.startsWith('blob:')) {
     URL.revokeObjectURL(url)
@@ -596,10 +602,7 @@ const VideoPage: FC = () => {
     const body: Record<string, unknown> = {
       model: state.model,
       prompt: state.prompt,
-      size,
-      aspect_ratio: state.aspectRatio,
-      resolution: state.resolution,
-      enhance_prompt: state.enhancePrompt
+      size
     }
 
     if (state.firstFrame) {
@@ -637,7 +640,7 @@ const VideoPage: FC = () => {
         const contentType = response.headers.get('content-type') || ''
         if (contentType.includes('video/') || contentType.includes('octet-stream')) {
           const blob = await response.blob()
-          return { blobUrl: URL.createObjectURL(blob) }
+          return { blobUrl: createVideoObjectUrl(blob, url) }
         }
 
         const data = await response.json()
@@ -677,7 +680,14 @@ const VideoPage: FC = () => {
   )
 
   useEffect(() => {
-    if (!selectedVideo?.url || selectedVideo.localFile || selectedVideo.status !== 'completed') return
+    if (
+      !selectedVideo?.url ||
+      selectedVideo.localFile ||
+      selectedVideo.blobUrl ||
+      selectedVideo.status !== 'completed'
+    ) {
+      return
+    }
 
     const controller = new AbortController()
 
@@ -729,7 +739,7 @@ const VideoPage: FC = () => {
         const contentType = response.headers.get('content-type') || ''
         if (contentType.includes('video/') || contentType.includes('octet-stream')) {
           const blob = await response.blob()
-          return { blobUrl: URL.createObjectURL(blob) }
+          return { blobUrl: createVideoObjectUrl(blob, endpoint) }
         }
 
         const data = await response.json()
@@ -1216,10 +1226,9 @@ const VideoPage: FC = () => {
             {previewSrc ? (
               <PreviewPanel>
                 <VideoPreview
-                  key={previewSrc}
                   ref={videoRef}
                   controls
-                  preload="metadata"
+                  preload="auto"
                   src={previewSrc}
                   onCanPlay={handleVideoLoaded}
                   onLoadedMetadata={handleVideoLoaded}

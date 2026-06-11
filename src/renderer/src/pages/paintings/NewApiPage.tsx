@@ -22,12 +22,13 @@ import PaintingsList from '@renderer/pages/paintings/components/PaintingsList'
 import {
   DEFAULT_PAINTING,
   getNewApiModelConfig,
+  isNewApiGptImage2Model,
   parseNewApiImageSize,
   SUPPORTED_MODELS
 } from '@renderer/pages/paintings/config/NewApiConfig'
 import FileManager from '@renderer/services/FileManager'
 import { translateText } from '@renderer/services/TranslateService'
-import type { PaintingAction, PaintingsState } from '@renderer/types'
+import type { Model, PaintingAction, PaintingsState } from '@renderer/types'
 import type { FileMetadata } from '@renderer/types'
 import { getErrorMessage, uuid } from '@renderer/utils'
 import { isSendMessageKeyPressed } from '@renderer/utils/input'
@@ -50,6 +51,19 @@ import ProviderSelect from './components/ProviderSelect'
 import { checkProviderEnabled, findPaintingByFiles } from './utils'
 
 const logger = loggerService.withContext('NewApiPage')
+
+const isNewApiImageGenerationModel = (model: Model) => {
+  const endpointTypes = model.supported_endpoint_types?.map((type) => String(type)) ?? []
+  const endpointType = String(model.endpoint_type ?? '')
+  const value = `${model.id} ${model.name} ${model.group} ${model.description ?? ''}`.toLowerCase()
+
+  return (
+    endpointType === 'image-generation' ||
+    endpointTypes.includes('image-generation') ||
+    endpointTypes.includes('images') ||
+    /\bgpt-image\b|chatgpt-image|gemini.*image|grok.*image|image-generation/.test(value)
+  )
+}
 
 type NewApiGenerationTask = {
   paintingId: string
@@ -203,16 +217,14 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
   // const modelOptions = MODELS.map((m) => ({ label: m.name, value: m.name }))
 
   const modelOptions = useMemo(() => {
-    const customModels = newApiProvider.models
-      .filter((m) => m.endpoint_type && m.endpoint_type === 'image-generation')
-      .map((m) => ({
-        label: m.name,
-        value: m.id,
-        custom: !SUPPORTED_MODELS.includes(m.id),
-        group: m.group
-      }))
+    const customModels = newApiProvider.models.filter(isNewApiImageGenerationModel).map((m) => ({
+      label: m.name || m.id,
+      value: m.id,
+      custom: !SUPPORTED_MODELS.includes(m.id),
+      group: m.group || newApiProvider.name
+    }))
     return [...customModels]
-  }, [newApiProvider.models])
+  }, [newApiProvider.models, newApiProvider.name])
 
   // 根据 group 将模型进行分组，便于在下拉列表中分组渲染
   const groupedModelOptions = useMemo(() => {
@@ -236,6 +248,42 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
   }, [modelOptions, painting.model, newApiProvider.id])
 
   const selectedModelConfig = useMemo(() => getNewApiModelConfig(painting.model), [painting.model])
+  const selectedImageSizeValues = useMemo(
+    () => selectedModelConfig?.imageSizes?.map((item) => item.value) ?? [],
+    [selectedModelConfig]
+  )
+  const selectedQualityValues = useMemo(
+    () => selectedModelConfig?.quality?.map((item) => item.value) ?? [],
+    [selectedModelConfig]
+  )
+
+  useEffect(() => {
+    if (selectedImageSizeValues.length === 0) {
+      return
+    }
+
+    if (!painting.size || !selectedImageSizeValues.includes(painting.size)) {
+      updatePaintingState({ size: selectedImageSizeValues[0] })
+    }
+  }, [painting.size, selectedImageSizeValues, updatePaintingState])
+
+  useEffect(() => {
+    if (selectedQualityValues.length === 0) {
+      return
+    }
+
+    if (!painting.quality || !selectedQualityValues.includes(painting.quality)) {
+      updatePaintingState({ quality: selectedQualityValues[0] })
+    }
+  }, [painting.quality, selectedQualityValues, updatePaintingState])
+
+  useEffect(() => {
+    if (!selectedModelConfig?.max_images || !painting.n || painting.n <= selectedModelConfig.max_images) {
+      return
+    }
+
+    updatePaintingState({ n: selectedModelConfig.max_images })
+  }, [painting.n, selectedModelConfig?.max_images, updatePaintingState])
 
   const handleModelChange = (value: string) => {
     const modelConfig = getNewApiModelConfig(value)
@@ -401,15 +449,17 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
     try {
       if (mode === 'openai_image_generate') {
         const parsedImageSize = parseNewApiImageSize(painting.size)
+        const isGptImage2 = isNewApiGptImage2Model(painting.model)
         const requestData = {
           prompt,
           model: painting.model,
           size: parsedImageSize.size === 'auto' ? undefined : parsedImageSize.size,
-          aspect_ratio: parsedImageSize.aspectRatio,
-          background: painting.background === 'auto' ? undefined : painting.background,
-          n: painting.n,
+          aspect_ratio: isGptImage2 ? undefined : parsedImageSize.aspectRatio,
+          background: isGptImage2 || painting.background === 'auto' ? undefined : painting.background,
+          n: isGptImage2 ? 1 : painting.n,
           quality: painting.quality === 'auto' ? undefined : painting.quality,
-          moderation: painting.moderation === 'auto' ? undefined : painting.moderation
+          moderation: isGptImage2 || painting.moderation === 'auto' ? undefined : painting.moderation,
+          response_format: isGptImage2 ? 'b64_json' : undefined
         }
 
         body = JSON.stringify(requestData)

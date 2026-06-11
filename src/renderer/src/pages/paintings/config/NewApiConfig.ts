@@ -21,7 +21,25 @@ const ONE_TWO_K_ASPECT_SIZES = [
   { value: '2K|9:16', label: '2K 9:16' }
 ]
 
+const GPT_IMAGE_2_SIZES = [
+  { value: '1024x1024', label: '1024x1024' },
+  { value: '1536x1024', label: '1536x1024' },
+  { value: '1024x1536', label: '1024x1536' },
+  { value: '2048x2048', label: '2K 2048x2048' },
+  { value: '2048x1152', label: '2K 2048x1152' },
+  { value: '3840x2160', label: '4K 3840x2160' },
+  { value: '2160x3840', label: '4K 2160x3840' },
+  { value: 'auto', label: 'auto' }
+]
+
 const GPT_IMAGE_QUALITY = [{ value: 'auto' }, { value: 'high' }, { value: 'medium' }, { value: 'low' }]
+const GPT_IMAGE_2_QUALITY = [
+  { value: 'auto' },
+  { value: 'medium' },
+  { value: 'standard' },
+  { value: 'high' },
+  { value: 'hd' }
+]
 const GPT_IMAGE_MODERATION = [{ value: 'auto' }, { value: 'low' }]
 const GPT_IMAGE_BACKGROUND = [{ value: 'auto' }, { value: 'transparent' }, { value: 'opaque' }]
 
@@ -51,10 +69,9 @@ export const MODELS = [
   {
     name: 'gpt-image-2',
     group: 'OpenAI',
-    imageSizes: ONE_TWO_K_ASPECT_SIZES,
-    max_images: 10,
-    quality: GPT_IMAGE_QUALITY,
-    moderation: GPT_IMAGE_MODERATION,
+    imageSizes: GPT_IMAGE_2_SIZES,
+    max_images: 1,
+    quality: GPT_IMAGE_2_QUALITY,
     output_compression_format: [{ value: 'jpeg' }, { value: 'webp' }],
     output_format: [{ value: 'image/png' }, { value: 'image/jpeg' }, { value: 'image/webp' }],
     background: GPT_IMAGE_BACKGROUND
@@ -62,10 +79,9 @@ export const MODELS = [
   {
     name: 'chatgpt-image-latest',
     group: 'OpenAI',
-    imageSizes: ONE_TWO_K_ASPECT_SIZES,
-    max_images: 10,
-    quality: GPT_IMAGE_QUALITY,
-    moderation: GPT_IMAGE_MODERATION,
+    imageSizes: GPT_IMAGE_2_SIZES,
+    max_images: 1,
+    quality: GPT_IMAGE_2_QUALITY,
     output_compression_format: [{ value: 'jpeg' }, { value: 'webp' }],
     output_format: [{ value: 'image/png' }, { value: 'image/jpeg' }, { value: 'image/webp' }],
     background: GPT_IMAGE_BACKGROUND
@@ -113,6 +129,15 @@ export function parseNewApiImageSize(value?: string) {
 
   const [size, aspectRatio] = value.split('|')
   return { size, aspectRatio }
+}
+
+export function isNewApiGptImage2Model(model?: string) {
+  if (!model) {
+    return false
+  }
+
+  const normalizedModel = model.toLowerCase()
+  return normalizedModel.includes('gpt-image-2') || normalizedModel.includes('chatgpt-image')
 }
 
 export const DEFAULT_PAINTING: GeneratePainting = {
