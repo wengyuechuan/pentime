@@ -1,24 +1,32 @@
 import type { GeneratePainting } from '@renderer/types'
 import { uuid } from '@renderer/utils'
 
+type NewApiOption = {
+  value: string
+  label?: string
+}
+
+type NewApiModelConfig = {
+  name: string
+  group: string
+  imageSizes?: NewApiOption[]
+  max_images: number
+  quality?: NewApiOption[]
+  moderation?: NewApiOption[]
+  output_compression_format?: NewApiOption[]
+  output_format?: NewApiOption[]
+  background?: NewApiOption[]
+}
+
 export const SUPPORTED_MODELS = [
   'gpt-image-1',
   'gpt-image-1.5',
   'gpt-image-2',
+  'gpt-image-v2',
   'chatgpt-image-latest',
   'gemini-2.5-flash-image',
   'gemini-2.5-flash-image-preview',
   'gemini-3-pro-image-preview'
-]
-
-const ONE_TWO_K_ASPECT_SIZES = [
-  { value: 'auto', label: 'auto' },
-  { value: '1K|1:1', label: '1K 1:1' },
-  { value: '1K|16:9', label: '1K 16:9' },
-  { value: '1K|9:16', label: '1K 9:16' },
-  { value: '2K|1:1', label: '2K 1:1' },
-  { value: '2K|16:9', label: '2K 16:9' },
-  { value: '2K|9:16', label: '2K 9:16' }
 ]
 
 const GPT_IMAGE_2_SIZES = [
@@ -43,11 +51,10 @@ const GPT_IMAGE_2_QUALITY = [
 const GPT_IMAGE_MODERATION = [{ value: 'auto' }, { value: 'low' }]
 const GPT_IMAGE_BACKGROUND = [{ value: 'auto' }, { value: 'transparent' }, { value: 'opaque' }]
 
-export const MODELS = [
+export const MODELS: NewApiModelConfig[] = [
   {
     name: 'gpt-image-1',
     group: 'OpenAI',
-    imageSizes: [{ value: 'auto' }, { value: '1024x1024' }, { value: '1536x1024' }, { value: '1024x1536' }],
     max_images: 10,
     quality: GPT_IMAGE_QUALITY,
     moderation: GPT_IMAGE_MODERATION,
@@ -58,7 +65,6 @@ export const MODELS = [
   {
     name: 'gpt-image-1.5',
     group: 'OpenAI',
-    imageSizes: [{ value: 'auto' }, { value: '1024x1024' }, { value: '1536x1024' }, { value: '1024x1536' }],
     max_images: 10,
     quality: GPT_IMAGE_QUALITY,
     moderation: GPT_IMAGE_MODERATION,
@@ -79,7 +85,6 @@ export const MODELS = [
   {
     name: 'chatgpt-image-latest',
     group: 'OpenAI',
-    imageSizes: GPT_IMAGE_2_SIZES,
     max_images: 1,
     quality: GPT_IMAGE_2_QUALITY,
     output_compression_format: [{ value: 'jpeg' }, { value: 'webp' }],
@@ -89,36 +94,41 @@ export const MODELS = [
   {
     name: 'gemini-2.5-flash-image',
     group: 'Gemini',
-    imageSizes: ONE_TWO_K_ASPECT_SIZES,
     max_images: 4
   },
   {
     name: 'gemini-2.5-flash-image-preview',
     group: 'Gemini',
-    imageSizes: ONE_TWO_K_ASPECT_SIZES,
     max_images: 4
   },
   {
     name: 'gemini-3-pro-image-preview',
     group: 'Gemini',
-    imageSizes: ONE_TWO_K_ASPECT_SIZES,
     max_images: 4
   }
 ]
 
+const DEFAULT_MODEL_CONFIG: NewApiModelConfig = {
+  name: 'custom-image-model',
+  group: 'Custom',
+  max_images: 1
+}
+
 export function getNewApiModelConfig(model?: string) {
   if (!model) {
-    return MODELS[0]
+    return DEFAULT_MODEL_CONFIG
   }
+
+  const normalizedModel = model.toLowerCase()
 
   return (
     MODELS.find((m) => m.name === model) ||
-    (model.includes('gpt-image-2') ? MODELS.find((m) => m.name === 'gpt-image-2') : undefined) ||
-    (model.includes('chatgpt-image') ? MODELS.find((m) => m.name === 'chatgpt-image-latest') : undefined) ||
-    (model.includes('gemini') && model.includes('image')
+    (isNewApiImageSizeModel(model) ? MODELS.find((m) => m.name === 'gpt-image-2') : undefined) ||
+    (normalizedModel.includes('chatgpt-image') ? MODELS.find((m) => m.name === 'chatgpt-image-latest') : undefined) ||
+    (normalizedModel.includes('gemini') && normalizedModel.includes('image')
       ? MODELS.find((m) => m.name === 'gemini-3-pro-image-preview')
       : undefined) ||
-    MODELS[0]
+    DEFAULT_MODEL_CONFIG
   )
 }
 
@@ -137,7 +147,20 @@ export function isNewApiGptImage2Model(model?: string) {
   }
 
   const normalizedModel = model.toLowerCase()
-  return normalizedModel.includes('gpt-image-2') || normalizedModel.includes('chatgpt-image')
+  return (
+    normalizedModel.includes('gpt-image-2') ||
+    normalizedModel.includes('gpt-image-v2') ||
+    normalizedModel.includes('chatgpt-image')
+  )
+}
+
+export function isNewApiImageSizeModel(model?: string) {
+  if (!model) {
+    return false
+  }
+
+  const normalizedModel = model.toLowerCase()
+  return normalizedModel === 'gpt-image-2'
 }
 
 export const DEFAULT_PAINTING: GeneratePainting = {

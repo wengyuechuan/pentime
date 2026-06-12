@@ -59,37 +59,16 @@ describe('bootstrapBuiltinAgents', () => {
     vi.useRealTimers()
   })
 
-  it('retries built-in bootstrap when no model is available yet', async () => {
-    mockInitDefaultCherryClawAgent
-      .mockResolvedValueOnce({ agentId: null, skippedReason: 'no_model' })
-      .mockResolvedValueOnce({ agentId: 'cherry-claw-default' })
-    mockInitBuiltinAgent.mockResolvedValue({ agentId: null, skippedReason: 'deleted' })
-
-    const { bootstrapBuiltinAgents } = await import('../BuiltinAgentBootstrap')
-
-    await bootstrapBuiltinAgents()
-    expect(mockInitDefaultCherryClawAgent).toHaveBeenCalledTimes(1)
-    expect(mockCreateSession).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(5000)
-
-    expect(mockInitDefaultCherryClawAgent).toHaveBeenCalledTimes(2)
-    expect(mockListSessions).toHaveBeenCalledWith('cherry-claw-default', { limit: 1 })
-    expect(mockCreateSession).toHaveBeenCalledWith('cherry-claw-default', {})
-    expect(mockEnsureHeartbeatTask).toHaveBeenCalledWith('cherry-claw-default', 30)
-  })
-
-  it('does not retry built-in agents deleted by the user', async () => {
-    mockInitDefaultCherryClawAgent.mockResolvedValue({ agentId: null, skippedReason: 'deleted' })
-    mockInitBuiltinAgent.mockResolvedValue({ agentId: null, skippedReason: 'deleted' })
-
+  it('installs built-in skills without creating default Cherry agents', async () => {
     const { bootstrapBuiltinAgents } = await import('../BuiltinAgentBootstrap')
 
     await bootstrapBuiltinAgents()
     await vi.advanceTimersByTimeAsync(60000)
 
-    expect(mockInitDefaultCherryClawAgent).toHaveBeenCalledTimes(1)
-    expect(mockInitBuiltinAgent).toHaveBeenCalledTimes(1)
+    expect(mockInstallBuiltinSkills).toHaveBeenCalledTimes(1)
+    expect(mockInitDefaultCherryClawAgent).not.toHaveBeenCalled()
+    expect(mockInitBuiltinAgent).not.toHaveBeenCalled()
+    expect(mockListSessions).not.toHaveBeenCalled()
     expect(mockCreateSession).not.toHaveBeenCalled()
     expect(mockEnsureHeartbeatTask).not.toHaveBeenCalled()
   })

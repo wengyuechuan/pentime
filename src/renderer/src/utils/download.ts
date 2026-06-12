@@ -10,7 +10,15 @@ export const download = (url: string, filename?: string) => {
   // - 相对安全的内联数据 ( data:image/png, data:image/jpeg )
   //   (注: 其他 data 类型，如 data:text/html 或 data:image/svg+xml，
   //    因其潜在安全风险，不在此处理，将由后续 fetch 逻辑处理或被 CSP 阻止。)
-  const SUPPORTED_PREFIXES = ['file://', 'blob:', 'data:image/png', 'data:image/jpeg']
+  const SUPPORTED_PREFIXES = [
+    'file://',
+    'blob:',
+    'data:image/png',
+    'data:image/jpeg',
+    'data:image/webp',
+    'data:image/gif',
+    'data:image/bmp'
+  ]
   if (SUPPORTED_PREFIXES.some((prefix) => url.startsWith(prefix))) {
     const link = document.createElement('a')
     link.href = url
@@ -100,6 +108,8 @@ function getExtensionFromMimeType(mimeType: string | null): string {
     'image/jpeg': '.jpg',
     'image/png': '.png',
     'image/gif': '.gif',
+    'image/webp': '.webp',
+    'image/bmp': '.bmp',
     'image/svg+xml': '.svg',
     'application/pdf': '.pdf',
     'text/plain': '.txt',

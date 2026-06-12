@@ -6077,6 +6077,7 @@
     "new_task": "新增",
     "no_history": "暫無影片",
     "no_provider": "暫無可用 Pen time 服務商",
+    "no_video_model": "暫無可用的影片生成模型，請先啟用 Pen time 服務商、填寫 API Key，並新增端點類型為影片生成的模型",
     "prompt_placeholder": "描述你想產生的影片畫面、鏡頭運動和風格...",
     "resolution": "解析度",
     "seconds": "秒",

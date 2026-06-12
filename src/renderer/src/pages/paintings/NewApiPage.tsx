@@ -23,6 +23,7 @@ import {
   DEFAULT_PAINTING,
   getNewApiModelConfig,
   isNewApiGptImage2Model,
+  isNewApiImageSizeModel,
   parseNewApiImageSize,
   SUPPORTED_MODELS
 } from '@renderer/pages/paintings/config/NewApiConfig'
@@ -248,9 +249,10 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
   }, [modelOptions, painting.model, newApiProvider.id])
 
   const selectedModelConfig = useMemo(() => getNewApiModelConfig(painting.model), [painting.model])
+  const isImageSizeSupported = isNewApiImageSizeModel(painting.model)
   const selectedImageSizeValues = useMemo(
-    () => selectedModelConfig?.imageSizes?.map((item) => item.value) ?? [],
-    [selectedModelConfig]
+    () => (isImageSizeSupported ? (selectedModelConfig?.imageSizes?.map((item) => item.value) ?? []) : []),
+    [isImageSizeSupported, selectedModelConfig]
   )
   const selectedQualityValues = useMemo(
     () => selectedModelConfig?.quality?.map((item) => item.value) ?? [],
@@ -290,8 +292,10 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
     const updates: Partial<PaintingAction> = { model: value }
 
     // 设置默认值
-    if (modelConfig?.imageSizes?.length) {
+    if (isNewApiImageSizeModel(value) && modelConfig?.imageSizes?.length) {
       updates.size = modelConfig.imageSizes[0].value
+    } else {
+      updates.size = 'auto'
     }
     if (modelConfig?.quality?.length) {
       updates.quality = modelConfig.quality[0].value
@@ -450,11 +454,12 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
       if (mode === 'openai_image_generate') {
         const parsedImageSize = parseNewApiImageSize(painting.size)
         const isGptImage2 = isNewApiGptImage2Model(painting.model)
+        const supportsImageSize = isNewApiImageSizeModel(painting.model)
         const requestData = {
           prompt,
           model: painting.model,
-          size: parsedImageSize.size === 'auto' ? undefined : parsedImageSize.size,
-          aspect_ratio: isGptImage2 ? undefined : parsedImageSize.aspectRatio,
+          size: supportsImageSize && parsedImageSize.size !== 'auto' ? parsedImageSize.size : undefined,
+          aspect_ratio: undefined,
           background: isGptImage2 || painting.background === 'auto' ? undefined : painting.background,
           n: isGptImage2 ? 1 : painting.n,
           quality: painting.quality === 'auto' ? undefined : painting.quality,
@@ -473,13 +478,10 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
           formData.append('background', painting.background)
         }
 
-        if (painting.size && painting.size !== 'auto') {
+        if (isNewApiImageSizeModel(painting.model) && painting.size && painting.size !== 'auto') {
           const parsedImageSize = parseNewApiImageSize(painting.size)
           if (parsedImageSize.size && parsedImageSize.size !== 'auto') {
             formData.append('size', parsedImageSize.size)
-          }
-          if (parsedImageSize.aspectRatio) {
-            formData.append('aspect_ratio', parsedImageSize.aspectRatio)
           }
         }
 
@@ -848,7 +850,7 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
               </Select>
 
               {/* Image Size */}
-              {selectedModelConfig?.imageSizes && selectedModelConfig.imageSizes.length > 0 && (
+              {isImageSizeSupported && selectedModelConfig?.imageSizes && selectedModelConfig.imageSizes.length > 0 && (
                 <>
                   <SettingTitle>{t('paintings.image.size')}</SettingTitle>
                   <Select value={painting.size} onChange={handleSizeChange} style={{ width: '100%', marginBottom: 15 }}>

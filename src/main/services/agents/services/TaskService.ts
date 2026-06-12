@@ -1,6 +1,6 @@
 import { loggerService } from '@logger'
 import type { CreateTaskRequest, ListOptions, ScheduledTaskEntity, TaskRunLogEntity, UpdateTaskRequest } from '@types'
-import { and, asc, count, desc, eq, inArray, lte, ne } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, lte, ne, notInArray } from 'drizzle-orm'
 
 import { BaseService } from '../BaseService'
 import {
@@ -12,8 +12,10 @@ import {
   type TaskRow,
   taskRunLogsTable
 } from '../database/schema'
+import { CHERRY_ASSISTANT_AGENT_ID, CHERRY_CLAW_AGENT_ID } from './builtin/BuiltinAgentIds'
 
 const logger = loggerService.withContext('TaskService')
+const BUILTIN_AGENT_IDS = [CHERRY_CLAW_AGENT_ID, CHERRY_ASSISTANT_AGENT_ID]
 
 export class TaskService extends BaseService {
   private static instance: TaskService | null = null
@@ -300,7 +302,7 @@ export class TaskService extends BaseService {
     const [result] = await database
       .select({ count: count() })
       .from(scheduledTasksTable)
-      .where(eq(scheduledTasksTable.status, 'active'))
+      .where(and(eq(scheduledTasksTable.status, 'active'), notInArray(scheduledTasksTable.agent_id, BUILTIN_AGENT_IDS)))
     return (result?.count ?? 0) > 0
   }
 
@@ -310,7 +312,13 @@ export class TaskService extends BaseService {
     const result = await database
       .select()
       .from(scheduledTasksTable)
-      .where(and(eq(scheduledTasksTable.status, 'active'), lte(scheduledTasksTable.next_run, now)))
+      .where(
+        and(
+          eq(scheduledTasksTable.status, 'active'),
+          lte(scheduledTasksTable.next_run, now),
+          notInArray(scheduledTasksTable.agent_id, BUILTIN_AGENT_IDS)
+        )
+      )
       .orderBy(asc(scheduledTasksTable.next_run))
 
     return result as ScheduledTaskEntity[]

@@ -65,8 +65,7 @@ type GeneratedVideo = {
 type VideoFormState = {
   model: string
   prompt: string
-  aspectRatio: string
-  resolution: string
+  size: string
   enhancePrompt: boolean
   firstFrame?: FrameImage
   lastFrame?: FrameImage
@@ -94,23 +93,26 @@ type VideoEndpoints = {
   content: string
 }
 
-const DEFAULT_VIDEO_MODELS = [
-  'gemini-veo-3.1-generate-preview-4s',
-  'gemini-veo-3.1-generate-preview-6s',
-  'gemini-veo-3.1-generate-preview-8s'
-]
-
-const ASPECT_RATIO_OPTIONS = ['16:9', '9:16']
-const RESOLUTION_OPTIONS = ['720p', '1080p']
-const VIDEO_SIZE_BY_RATIO: Record<string, Record<string, string>> = {
-  '16:9': {
-    '720p': '1280x720',
-    '1080p': '1920x1080'
-  },
-  '9:16': {
-    '720p': '720x1280',
-    '1080p': '1080x1920'
-  }
+const VIDEO_SIZE_OPTIONS = ['1280x720', '720x1280', '1920x1080', '1080x1920']
+const VIDEO_TASK_STATUS_LABELS: Record<string, string> = {
+  NOT_START: '未开始',
+  SUBMITTED: '已提交',
+  QUEUED: '排队中',
+  IN_PROGRESS: '处理中',
+  SUCCESS: '成功',
+  FAILURE: '失败',
+  UNKNOWN: '未知',
+  PENDING: '未开始',
+  PROCESSING: '处理中',
+  COMPLETED: '成功',
+  COMPLETE: '成功',
+  SUCCEEDED: '成功',
+  DONE: '成功',
+  FINISHED: '成功',
+  FAILED: '失败',
+  ERROR: '失败',
+  CANCELLED: '失败',
+  CANCELED: '失败'
 }
 const MAX_POLL_COUNT = 120
 const POLL_INTERVAL_MS = 3000
@@ -118,8 +120,7 @@ const POLL_INTERVAL_MS = 3000
 const DEFAULT_FORM: VideoFormState = {
   model: '',
   prompt: '',
-  aspectRatio: '16:9',
-  resolution: '720p',
+  size: VIDEO_SIZE_OPTIONS[0],
   enhancePrompt: true
 }
 
@@ -273,8 +274,27 @@ const pickVideoUrl = (...values: unknown[]) => {
   return undefined
 }
 
-const getVideoSize = (aspectRatio: string, resolution: string) => {
-  return VIDEO_SIZE_BY_RATIO[aspectRatio]?.[resolution] ?? VIDEO_SIZE_BY_RATIO['16:9']['720p']
+const normalizeTaskStatus = (status?: string) =>
+  status
+    ?.trim()
+    .replace(/[-\s]+/g, '_')
+    .toUpperCase()
+
+const getVideoTaskStatusLabel = (status?: string) => {
+  const normalizedStatus = normalizeTaskStatus(status)
+  if (!normalizedStatus) return undefined
+  return VIDEO_TASK_STATUS_LABELS[normalizedStatus]
+}
+
+const getVideoProgressText = (status?: string, message?: string, fallback?: string) => {
+  const normalizedStatus = normalizeTaskStatus(status)
+  return (
+    getVideoTaskStatusLabel(status) ||
+    getVideoTaskStatusLabel(message) ||
+    (message && /[\u4e00-\u9fa5]/.test(message) ? message : undefined) ||
+    (normalizedStatus ? VIDEO_TASK_STATUS_LABELS.UNKNOWN : undefined) ||
+    fallback
+  )
 }
 
 const extractTaskId = (data: any): string | undefined => {
@@ -524,6 +544,7 @@ const VideoPage: FC = () => {
 
   const modelOptions = useMemo(() => {
     if (!currentProvider) return []
+    if (!currentProvider.enabled || !currentProvider.apiKey.trim()) return []
 
     const providerModels = currentProvider.models.filter(isVideoModel).map((model) => ({
       label: model.name || model.id,
@@ -531,14 +552,8 @@ const VideoPage: FC = () => {
       group: model.group || currentProvider.name
     }))
 
-    const fallbackModels = DEFAULT_VIDEO_MODELS.map((model) => ({
-      label: model,
-      value: model,
-      group: 'Gemini / Veo'
-    }))
-
     const seen = new Set<string>()
-    return [...providerModels, ...fallbackModels].filter((item) => {
+    return providerModels.filter((item) => {
       if (seen.has(item.value)) return false
       seen.add(item.value)
       return true
@@ -577,7 +592,12 @@ const VideoPage: FC = () => {
   }, [])
 
   useEffect(() => {
-    if (modelOptions.length === 0) return
+    if (modelOptions.length === 0) {
+      if (form.model) {
+        setForm((prev) => ({ ...prev, model: '' }))
+      }
+      return
+    }
 
     if (!form.model || !modelOptions.some((option) => option.value === form.model)) {
       setForm((prev) => ({ ...prev, model: modelOptions[0].value }))
@@ -598,11 +618,10 @@ const VideoPage: FC = () => {
   }, [])
 
   const buildRequestBody = (state: VideoFormState) => {
-    const size = getVideoSize(state.aspectRatio, state.resolution)
     const body: Record<string, unknown> = {
       model: state.model,
       prompt: state.prompt,
-      size
+      size: VIDEO_SIZE_OPTIONS.includes(state.size) ? state.size : VIDEO_SIZE_OPTIONS[0]
     }
 
     if (state.firstFrame) {
@@ -777,7 +796,7 @@ const VideoPage: FC = () => {
           updateVideo(videoId, {
             status: isCompletedStatus(status) ? 'completed' : 'processing',
             ...(progress !== undefined ? { progress } : {}),
-            progressText: message || status || t('video.status.processing')
+            progressText: getVideoProgressText(status, message, t('video.status.processing'))
           })
 
           if (url) {
@@ -896,8 +915,11 @@ const VideoPage: FC = () => {
         url: task.url,
         status: task.url ? 'completed' : 'processing',
         ...(task.progress !== undefined ? { progress: task.progress } : task.url ? { progress: 100 } : {}),
-        progressText:
-          task.message || task.status || (task.url ? t('video.status.completed') : t('video.status.processing'))
+        progressText: getVideoProgressText(
+          task.status,
+          task.message,
+          task.url ? t('video.status.completed') : t('video.status.processing')
+        )
       })
 
       if (task.url) {
@@ -1152,73 +1174,74 @@ const VideoPage: FC = () => {
 
           <ProviderSelect provider={currentProvider} options={providerOptions} onChange={handleProviderChange} />
 
-          <SettingTitle style={{ marginTop: 20 }}>{t('video.model')}</SettingTitle>
-          <Select
-            value={form.model}
-            onChange={(model) => setForm((prev) => ({ ...prev, model }))}
-            style={{ width: '100%' }}>
-            {Object.entries(groupedModelOptions).map(([groupName, options]) => (
-              <Select.OptGroup label={groupName} key={groupName}>
-                {options.map((model) => (
-                  <Select.Option value={model.value} key={model.value}>
-                    {model.label}
-                  </Select.Option>
+          {modelOptions.length === 0 ? (
+            <Empty style={{ marginTop: 24 }} description={t('video.no_video_model')}>
+              <Button type="primary" onClick={() => navigate(`/settings/provider?id=${currentProvider.id}`)}>
+                {t('common.go_to_settings')}
+              </Button>
+            </Empty>
+          ) : (
+            <>
+              <SettingTitle style={{ marginTop: 20 }}>{t('video.model')}</SettingTitle>
+              <Select
+                value={form.model}
+                onChange={(model) => setForm((prev) => ({ ...prev, model }))}
+                style={{ width: '100%' }}>
+                {Object.entries(groupedModelOptions).map(([groupName, options]) => (
+                  <Select.OptGroup label={groupName} key={groupName}>
+                    {options.map((model) => (
+                      <Select.Option value={model.value} key={model.value}>
+                        {model.label}
+                      </Select.Option>
+                    ))}
+                  </Select.OptGroup>
                 ))}
-              </Select.OptGroup>
-            ))}
-          </Select>
+              </Select>
 
-          <SettingTitle style={{ marginTop: 20, marginBottom: 5 }}>{t('video.default_settings')}</SettingTitle>
-          <TwoColumn>
-            <Field>
-              <Select
-                value={form.aspectRatio}
-                onChange={(aspectRatio) => setForm((prev) => ({ ...prev, aspectRatio }))}
-                options={ASPECT_RATIO_OPTIONS.map((value) => ({ label: value, value }))}
-              />
-            </Field>
-            <Field>
-              <Select
-                value={form.resolution}
-                onChange={(resolution) => setForm((prev) => ({ ...prev, resolution }))}
-                options={RESOLUTION_OPTIONS.map((value) => ({ label: value, value }))}
-              />
-            </Field>
-          </TwoColumn>
+              <SettingTitle style={{ marginTop: 20, marginBottom: 5 }}>{t('video.default_settings')}</SettingTitle>
+              <Field>
+                <Select
+                  value={form.size}
+                  onChange={(size) => setForm((prev) => ({ ...prev, size }))}
+                  options={VIDEO_SIZE_OPTIONS.map((value) => ({ label: value, value }))}
+                />
+              </Field>
 
-          <SwitchRow>
-            <span>{t('video.enhance_prompt')}</span>
-            <Switch
-              checked={form.enhancePrompt}
-              onChange={(enhancePrompt) => setForm((prev) => ({ ...prev, enhancePrompt }))}
-            />
-          </SwitchRow>
+              <SwitchRow>
+                <span>{t('video.enhance_prompt')}</span>
+                <Switch
+                  checked={form.enhancePrompt}
+                  onChange={(enhancePrompt) => setForm((prev) => ({ ...prev, enhancePrompt }))}
+                />
+              </SwitchRow>
 
-          <SettingTitle style={{ marginTop: 20 }}>{t('video.first_frame')}</SettingTitle>
-          <Upload
-            accept="image/png,image/jpeg,image/webp"
-            maxCount={1}
-            fileList={frameUploadList(form.firstFrame)}
-            beforeUpload={uploadFrame('firstFrame')}
-            onRemove={() => {
-              removeFrame('firstFrame')
-              return true
-            }}>
-            <UploadButton icon={<UploadIcon size={14} />}>{t('video.upload_frame')}</UploadButton>
-          </Upload>
+              <SettingTitle style={{ marginTop: 20 }}>{t('video.first_frame')}</SettingTitle>
+              <Upload
+                accept="image/png,image/jpeg,image/webp"
+                maxCount={1}
+                fileList={frameUploadList(form.firstFrame)}
+                beforeUpload={uploadFrame('firstFrame')}
+                onRemove={() => {
+                  removeFrame('firstFrame')
+                  return true
+                }}>
+                <UploadButton icon={<UploadIcon size={14} />}>{t('video.upload_frame')}</UploadButton>
+              </Upload>
 
-          <SettingTitle style={{ marginTop: 15 }}>{t('video.last_frame')}</SettingTitle>
-          <Upload
-            accept="image/png,image/jpeg,image/webp"
-            maxCount={1}
-            fileList={frameUploadList(form.lastFrame)}
-            beforeUpload={uploadFrame('lastFrame')}
-            onRemove={() => {
-              removeFrame('lastFrame')
-              return true
-            }}>
-            <UploadButton icon={<UploadIcon size={14} />}>{t('video.upload_frame')}</UploadButton>
-          </Upload>
+              <SettingTitle style={{ marginTop: 15 }}>{t('video.last_frame')}</SettingTitle>
+              <Upload
+                accept="image/png,image/jpeg,image/webp"
+                maxCount={1}
+                fileList={frameUploadList(form.lastFrame)}
+                beforeUpload={uploadFrame('lastFrame')}
+                onRemove={() => {
+                  removeFrame('lastFrame')
+                  return true
+                }}>
+                <UploadButton icon={<UploadIcon size={14} />}>{t('video.upload_frame')}</UploadButton>
+              </Upload>
+            </>
+          )}
         </LeftContainer>
 
         <MainContainer>
@@ -1301,7 +1324,10 @@ const VideoPage: FC = () => {
                     <MessageSquareDiff size={19} />
                   </ActionIconButton>
                 </Tooltip>
-                <SendMessageButton sendMessage={onGenerate} disabled={isLoading || isSelectedVideoLoading} />
+                <SendMessageButton
+                  sendMessage={onGenerate}
+                  disabled={isLoading || isSelectedVideoLoading || !form.model}
+                />
               </ToolbarMenu>
             </Toolbar>
           </InputContainer>
@@ -1397,10 +1423,11 @@ const MainContainer = styled.div`
 const RightContainer = styled(Scrollbar)`
   display: flex;
   flex-direction: column;
-  width: clamp(150px, 18vw, 220px);
-  min-width: 150px;
-  max-width: 220px;
-  padding: 12px;
+  flex: 0 0 100px;
+  width: 100px;
+  min-width: 100px;
+  max-width: 100px;
+  padding: 10px;
   border-left: 0.5px solid var(--color-border);
 `
 
@@ -1415,16 +1442,10 @@ const ProviderLogo = styled(Avatar)`
   border: 0.5px solid var(--color-border);
 `
 
-const TwoColumn = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 15px;
-`
-
 const Field = styled.div`
   display: flex;
   flex-direction: column;
+  margin-bottom: 15px;
 `
 
 const SwitchRow = styled.div`
@@ -1435,9 +1456,14 @@ const SwitchRow = styled.div`
   margin-top: 6px;
   margin-bottom: 16px;
   padding-top: 8px;
-  font-size: 15px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: bold;
   color: var(--color-text);
+
+  > span {
+    font-size: 14px;
+    font-weight: 700;
+  }
 `
 
 const UploadButton = styled(Button)`
@@ -1576,28 +1602,38 @@ const HistoryList = styled.div`
 const HistoryItem = styled.div<{ $active?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
+  width: 100%;
   min-width: 0;
-  padding: 8px;
+  max-width: 100%;
+  padding: 6px;
   border: 1px solid ${({ $active }) => ($active ? 'var(--color-primary)' : 'var(--color-border)')};
-  border-radius: 8px;
+  border-radius: 6px;
   background-color: ${({ $active }) => ($active ? 'var(--color-list-item)' : 'var(--color-background)')};
   cursor: pointer;
 `
 
 const HistoryHeader = styled.div`
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 
   .ant-tag {
-    flex-shrink: 0;
     margin-inline-end: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 `
 
 const HistoryModel = styled.div`
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   font-size: 12px;
   font-weight: 600;
   color: var(--color-text);
@@ -1608,10 +1644,10 @@ const HistoryModel = styled.div`
 
 const HistoryPrompt = styled.div`
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--color-text-2);
   word-break: break-word;
 `
