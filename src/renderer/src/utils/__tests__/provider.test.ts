@@ -30,6 +30,10 @@ vi.mock('@renderer/store/settings', () => ({
   default: (state = { settings: {} }) => state
 }))
 
+vi.mock('@renderer/store/llm', () => ({
+  default: (state = {}) => state
+}))
+
 vi.mock('@renderer/services/AssistantService', () => ({
   getProviderByModel: vi.fn(),
   getAssistantSettings: vi.fn(),
@@ -77,7 +81,7 @@ describe('provider utils', () => {
       createProvider({ id: 'other' })
     ]
 
-    expect(getClaudeSupportedProviders(providers)).toEqual(providers.slice(0, 3))
+    expect(getClaudeSupportedProviders(providers)).toEqual([providers[0], providers[2]])
   })
 
   it('filters Anthropic supported providers', () => {
@@ -88,15 +92,15 @@ describe('provider utils', () => {
       createProvider({ id: 'other' })
     ]
 
-    expect(getAnthropicSupportedProviders(providers)).toEqual(providers.slice(0, 2))
+    expect(getAnthropicSupportedProviders(providers)).toEqual([providers[0], providers[2]])
   })
 
   it('checks Anthropic supported provider', () => {
     expect(isAnthropicSupportedProvider(createProvider({ id: 'anthropic-official', type: 'anthropic' }))).toBe(true)
     expect(
       isAnthropicSupportedProvider(createProvider({ id: 'custom-host', anthropicApiHost: 'https://anthropic.local' }))
-    ).toBe(true)
-    expect(isAnthropicSupportedProvider(createProvider({ id: 'aihubmix' }))).toBe(false)
+    ).toBe(false)
+    expect(isAnthropicSupportedProvider(createProvider({ id: 'aihubmix' }))).toBe(true)
     expect(isAnthropicSupportedProvider(createProvider({ id: 'other' }))).toBe(false)
   })
 

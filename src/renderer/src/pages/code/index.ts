@@ -46,9 +46,7 @@ export const OPENAI_CODEX_SUPPORTED_PROVIDERS = ['openai', 'openrouter', 'aihubm
 // Provider 过滤映射
 export const CLI_TOOL_PROVIDER_MAP: Record<string, (providers: Provider[]) => Provider[]> = {
   [codeTools.claudeCode]: (providers) =>
-    providers.filter(
-      (p) => p.type === 'anthropic' || CLAUDE_SUPPORTED_PROVIDERS.includes(p.id) || !!p.anthropicApiHost
-    ),
+    providers.filter((p) => p.type === 'anthropic' || CLAUDE_SUPPORTED_PROVIDERS.includes(p.id)),
   [codeTools.geminiCli]: (providers) =>
     providers.filter((p) => p.type === 'gemini' || GEMINI_SUPPORTED_PROVIDERS.includes(p.id)),
   [codeTools.qwenCode]: (providers) => providers.filter((p) => p.type.includes('openai')),

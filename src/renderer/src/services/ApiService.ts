@@ -15,7 +15,7 @@ import { type FetchChatCompletionParams, getEffectiveMcpMode, isSystemProvider }
 import type { StreamTextParams } from '@renderer/types/aiCoreTypes'
 import { type Chunk, ChunkType } from '@renderer/types/chunk'
 import type { Message, ResponseError } from '@renderer/types/newMessage'
-import { removeSpecialCharactersForTopicName, uuid } from '@renderer/utils'
+import { getFileStorageName, removeSpecialCharactersForTopicName, uuid } from '@renderer/utils'
 import { abortCompletion, readyToAbort } from '@renderer/utils/abortController'
 import { trackTokenUsage } from '@renderer/utils/analytics'
 import { isToolUseModeFunction } from '@renderer/utils/assistant'
@@ -313,17 +313,13 @@ async function collectImagesFromMessages(userMessage: Message, assistantMessage?
   const images: string[] = []
 
   // 收集用户消息中的图像
-  // NOTE: Use `block.file.name` (always the on-disk filename) rather than
-  // `block.file.id + block.file.ext` — some save paths (saveBase64Image,
-  // savePastedImage) store `ext` without the leading dot, so concatenation
-  // produces broken paths like `<uuid>jpg` → ENOENT.
-  // Also note: `block.file.type` is a FileType enum (e.g. "image"), NOT a MIME
-  // type. `base64Image` derives the real MIME from the extension internally
-  // (and normalizes jpg → image/jpeg).
+  // NOTE: Use the on-disk filename instead of `block.file.id + block.file.ext`.
+  // Some save paths store `ext` without the leading dot, so raw concatenation
+  // can produce broken paths like `<uuid>png` or `<uuid>.png.png`.
   const userImageBlocks = findImageBlocks(userMessage)
   for (const block of userImageBlocks) {
     if (block.file) {
-      const { data } = await window.api.file.base64Image(block.file.name)
+      const { data } = await window.api.file.base64Image(getFileStorageName(block.file))
       images.push(data)
     }
   }
@@ -334,11 +330,11 @@ async function collectImagesFromMessages(userMessage: Message, assistantMessage?
     for (const block of assistantImageBlocks) {
       if (block.file) {
         try {
-          const { data } = await window.api.file.base64Image(block.file.name)
+          const { data } = await window.api.file.base64Image(getFileStorageName(block.file))
           images.push(data)
         } catch (error) {
           logger.error('Failed to load assistant image file, image will be excluded:', {
-            fileName: block.file.name,
+            fileName: getFileStorageName(block.file),
             error: error as Error
           })
         }

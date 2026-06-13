@@ -12,7 +12,7 @@ import ProviderSelect from '@renderer/pages/paintings/components/ProviderSelect'
 import { checkProviderEnabled } from '@renderer/pages/paintings/utils'
 import { translateText } from '@renderer/services/TranslateService'
 import type { FileMetadata, Model, Provider } from '@renderer/types'
-import { getErrorMessage, uuid } from '@renderer/utils'
+import { getErrorMessage, getFileStorageName, uuid } from '@renderer/utils'
 import { isSendMessageKeyPressed } from '@renderer/utils/input'
 import { isNewApiProvider } from '@renderer/utils/provider'
 import { Avatar, Button, Empty, Progress, Select, Space, Switch, Tag, Tooltip, Upload } from 'antd'
@@ -61,6 +61,8 @@ type GeneratedVideo = {
   progress?: number
   progressText?: string
 }
+
+type PersistedGeneratedVideo = Omit<GeneratedVideo, 'blobUrl' | 'playbackError'>
 
 type VideoFormState = {
   model: string
@@ -114,8 +116,20 @@ const VIDEO_TASK_STATUS_LABELS: Record<string, string> = {
   CANCELLED: '失败',
   CANCELED: '失败'
 }
+const VIDEO_TASK_PROGRESS_LABELS: Record<string, string> = {
+  NOT_START: 'Pentime未开始 请勿取消',
+  SUBMITTED: 'Pentime已提交 请勿取消',
+  QUEUED: 'Pentime排队中 请勿取消',
+  IN_PROGRESS: 'Pentime处理中 请勿取消',
+  PENDING: 'Pentime未开始 请勿取消',
+  PROCESSING: 'Pentime处理中 请勿取消',
+  UNKNOWN: 'Pentime处理中 请勿取消'
+}
 const MAX_POLL_COUNT = 120
 const POLL_INTERVAL_MS = 3000
+const VIDEO_HISTORY_STORAGE_KEY = 'pentime.video.history'
+const MAX_VIDEO_HISTORY_ITEMS = 80
+const INTERRUPTED_VIDEO_MESSAGE = '生成任务已中断，请重新生成'
 
 const DEFAULT_FORM: VideoFormState = {
   model: '',
@@ -131,8 +145,96 @@ type VideoPageState = {
   activeController?: AbortController
 }
 
+const isVideoStatus = (status: unknown): status is VideoStatus => {
+  return status === 'pending' || status === 'processing' || status === 'completed' || status === 'failed'
+}
+
+const toPersistedVideo = (video: GeneratedVideo): PersistedGeneratedVideo => {
+  const { blobUrl: _blobUrl, playbackError: _playbackError, ...persistedVideo } = video
+  return persistedVideo
+}
+
+const normalizePersistedVideo = (value: unknown): GeneratedVideo | undefined => {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+
+  const video = value as Partial<GeneratedVideo>
+  if (
+    typeof video.id !== 'string' ||
+    typeof video.providerId !== 'string' ||
+    typeof video.model !== 'string' ||
+    typeof video.prompt !== 'string' ||
+    typeof video.createdAt !== 'number' ||
+    !isVideoStatus(video.status)
+  ) {
+    return undefined
+  }
+
+  const isUnfinishedVideo = video.status === 'pending' || video.status === 'processing'
+
+  return {
+    id: video.id,
+    providerId: video.providerId,
+    model: video.model,
+    prompt: video.prompt,
+    status: isUnfinishedVideo ? 'failed' : video.status,
+    createdAt: video.createdAt,
+    taskId: typeof video.taskId === 'string' ? video.taskId : undefined,
+    url: typeof video.url === 'string' ? video.url : undefined,
+    localFile: video.localFile,
+    error: isUnfinishedVideo ? INTERRUPTED_VIDEO_MESSAGE : typeof video.error === 'string' ? video.error : undefined,
+    progress: typeof video.progress === 'number' ? video.progress : undefined,
+    progressText: isUnfinishedVideo
+      ? INTERRUPTED_VIDEO_MESSAGE
+      : typeof video.progressText === 'string'
+        ? video.progressText
+        : undefined
+  }
+}
+
+const loadPersistedVideos = () => {
+  if (typeof window === 'undefined') {
+    return []
+  }
+
+  try {
+    const rawVideos = window.localStorage.getItem(VIDEO_HISTORY_STORAGE_KEY)
+    if (!rawVideos) {
+      return []
+    }
+
+    const parsedVideos = JSON.parse(rawVideos)
+    if (!Array.isArray(parsedVideos)) {
+      return []
+    }
+
+    return parsedVideos
+      .map(normalizePersistedVideo)
+      .filter((video): video is GeneratedVideo => !!video)
+      .slice(0, MAX_VIDEO_HISTORY_ITEMS)
+  } catch (error) {
+    logger.warn('Failed to load persisted video history', error as Error)
+    return []
+  }
+}
+
+const persistVideos = (videos: GeneratedVideo[]) => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    const persistedVideos = videos.slice(0, MAX_VIDEO_HISTORY_ITEMS).map(toPersistedVideo)
+
+    window.localStorage.setItem(VIDEO_HISTORY_STORAGE_KEY, JSON.stringify(persistedVideos))
+  } catch (error) {
+    logger.warn('Failed to persist video history', error as Error)
+  }
+}
+
 let videoPageState: VideoPageState = {
-  videos: []
+  videos: loadPersistedVideos()
 }
 
 const videoPageListeners = new Set<() => void>()
@@ -151,6 +253,7 @@ const subscribeVideoPageState = (listener: () => void) => {
 const setVideoPageVideos = (updater: GeneratedVideo[] | ((prev: GeneratedVideo[]) => GeneratedVideo[])) => {
   const nextVideos = typeof updater === 'function' ? updater(videoPageState.videos) : updater
   videoPageState = { ...videoPageState, videos: nextVideos }
+  persistVideos(nextVideos)
   notifyVideoPageListeners()
 }
 
@@ -283,7 +386,7 @@ const normalizeTaskStatus = (status?: string) =>
 const getVideoTaskStatusLabel = (status?: string) => {
   const normalizedStatus = normalizeTaskStatus(status)
   if (!normalizedStatus) return undefined
-  return VIDEO_TASK_STATUS_LABELS[normalizedStatus]
+  return VIDEO_TASK_PROGRESS_LABELS[normalizedStatus] || VIDEO_TASK_STATUS_LABELS[normalizedStatus]
 }
 
 const getVideoProgressText = (status?: string, message?: string, fallback?: string) => {
@@ -292,7 +395,7 @@ const getVideoProgressText = (status?: string, message?: string, fallback?: stri
     getVideoTaskStatusLabel(status) ||
     getVideoTaskStatusLabel(message) ||
     (message && /[\u4e00-\u9fa5]/.test(message) ? message : undefined) ||
-    (normalizedStatus ? VIDEO_TASK_STATUS_LABELS.UNKNOWN : undefined) ||
+    (normalizedStatus ? VIDEO_TASK_PROGRESS_LABELS.UNKNOWN : undefined) ||
     fallback
   )
 }
@@ -395,6 +498,18 @@ const isFailedStatus = (status?: string) => {
   return ['failed', 'failure', 'error', 'cancelled', 'canceled'].includes(status.toLowerCase())
 }
 
+const isFailureText = (value?: string) => {
+  return !!value && /(失败|失敗|failed|failure|error|cancelled|canceled)/i.test(value)
+}
+
+const getEffectiveVideoStatus = (video?: GeneratedVideo): VideoStatus | undefined => {
+  if (!video) return undefined
+  if (video.status === 'failed' || isFailureText(video.error) || isFailureText(video.progressText)) {
+    return 'failed'
+  }
+  return video.status
+}
+
 const isErrorEnvelope = (data: any) => {
   return !!data?.error && !extractStatus(data) && !extractVideoUrl(data)
 }
@@ -458,6 +573,13 @@ const isVideoModel = (model: Model) => {
 }
 
 const createAbortError = () => new DOMException('Aborted', 'AbortError')
+
+class VideoTaskFailedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'VideoTaskFailedError'
+  }
+}
 
 const createVideoBlobUrl = (base64: string, mime: string) => {
   const binary = window.atob(base64)
@@ -541,6 +663,7 @@ const VideoPage: FC = () => {
   const [isPreparingPreview, setIsPreparingPreview] = useState(false)
   const [isTranslating, setIsTranslating] = useState(false)
   const [spaceClickCount, setSpaceClickCount] = useState(0)
+  const isPromptEmpty = !form.prompt.trim()
 
   const modelOptions = useMemo(() => {
     if (!currentProvider) return []
@@ -572,7 +695,9 @@ const VideoPage: FC = () => {
     () => videos.find((video) => video.id === selectedVideoId) || videos[0],
     [selectedVideoId, videos]
   )
-  const isSelectedVideoLoading = !!selectedVideo && selectedVideo.id === activeVideoId
+  const selectedVideoStatus = getEffectiveVideoStatus(selectedVideo)
+  const isSelectedVideoLoading =
+    !!selectedVideo && selectedVideo.id === activeVideoId && selectedVideoStatus !== 'failed'
   const selectedVideoProvider = useMemo(
     () => providers.find((provider) => provider.id === selectedVideo?.providerId),
     [providers, selectedVideo?.providerId]
@@ -678,7 +803,7 @@ const VideoPage: FC = () => {
       let blobUrl: string | undefined
 
       try {
-        const base64File = await window.api.file.base64File(`${file.id}${file.ext}`)
+        const base64File = await window.api.file.base64File(getFileStorageName(file))
 
         if (signal.aborted) {
           throw createAbortError()
@@ -791,28 +916,47 @@ const VideoPage: FC = () => {
         const message = extractMessage(data)
 
         if (isErrorEnvelope(data)) {
-          lastPollError = new Error(message || t('video.error.task_failed'))
-        } else {
+          const errorMessage = message || t('video.error.task_failed')
           updateVideo(videoId, {
-            status: isCompletedStatus(status) ? 'completed' : 'processing',
-            ...(progress !== undefined ? { progress } : {}),
-            progressText: getVideoProgressText(status, message, t('video.status.processing'))
+            status: 'failed',
+            error: errorMessage,
+            progressText: errorMessage
           })
+          throw new VideoTaskFailedError(errorMessage)
+        }
 
-          if (url) {
-            return { taskId, url, progress, status, raw: data }
-          }
+        if (isFailedStatus(status)) {
+          const errorMessage = message || t('video.error.task_failed')
+          updateVideo(videoId, {
+            status: 'failed',
+            error: errorMessage,
+            ...(progress !== undefined ? { progress } : {}),
+            progressText: errorMessage
+          })
+          throw new VideoTaskFailedError(errorMessage)
+        }
 
-          if (isCompletedStatus(status)) {
-            const content = await fetchVideoContent(endpoints, taskId, headers, signal)
-            return { taskId, ...content, progress, status, raw: data }
-          }
+        updateVideo(videoId, {
+          status: isCompletedStatus(status) ? 'completed' : 'processing',
+          ...(progress !== undefined ? { progress } : {}),
+          progressText: getVideoProgressText(status, message, t('video.status.processing'))
+        })
 
-          if (isFailedStatus(status)) {
-            throw new Error(message || t('video.error.task_failed'))
-          }
+        if (url) {
+          return { taskId, url, progress, status, raw: data }
+        }
+
+        if (isCompletedStatus(status)) {
+          const content = await fetchVideoContent(endpoints, taskId, headers, signal)
+          return { taskId, ...content, progress, status, raw: data }
         }
       } catch (error) {
+        if (
+          error instanceof VideoTaskFailedError ||
+          (error instanceof Error && (error.name === 'AbortError' || error.name === 'VideoTaskFailedError'))
+        ) {
+          throw error
+        }
         lastPollError = error
       }
 
@@ -881,7 +1025,7 @@ const VideoPage: FC = () => {
       prompt,
       status: 'pending',
       progress: 0,
-      progressText: t('video.status.submitting'),
+      progressText: getVideoProgressText('SUBMITTED', undefined, t('video.status.submitting')),
       createdAt: Date.now()
     }
 
@@ -901,7 +1045,7 @@ const VideoPage: FC = () => {
 
       updateVideo(videoId, {
         status: 'processing',
-        progressText: t('video.status.submitting')
+        progressText: getVideoProgressText('SUBMITTED', undefined, t('video.status.submitting'))
       })
 
       const task = await createVideoTask(currentProvider, headers, requestBody, controller.signal)
@@ -1014,7 +1158,8 @@ const VideoPage: FC = () => {
       isEnterPressed &&
       isSendMessageKeyPressed(event, sendMessageShortcut) &&
       !isLoading &&
-      !isSelectedVideoLoading
+      !isSelectedVideoLoading &&
+      !isPromptEmpty
     ) {
       event.preventDefault()
       void onGenerate()
@@ -1280,15 +1425,27 @@ const VideoPage: FC = () => {
                   </PreviewActions>
                 </PreviewFooter>
               </PreviewPanel>
-            ) : selectedVideo?.status === 'failed' ? (
+            ) : selectedVideoStatus === 'failed' ? (
               <StatusPanel>
                 <StatusTitle>{t('video.status.failed')}</StatusTitle>
-                <StatusText>{selectedVideo.error}</StatusText>
+                <StatusText>{selectedVideo?.error || selectedVideo?.progressText}</StatusText>
               </StatusPanel>
             ) : isSelectedVideoLoading && selectedVideo ? (
               <StatusPanel>
-                <Progress type="circle" percent={selectedVideo.progress ?? 0} />
-                <StatusText>{selectedVideo.progressText || t('video.status.processing')}</StatusText>
+                <Progress
+                  type="circle"
+                  percent={selectedVideo.progress ?? 0}
+                  status={selectedVideo.status === 'completed' ? 'success' : 'active'}
+                />
+                <StatusText>
+                  {selectedVideo.progressText ||
+                    getVideoProgressText('PROCESSING', undefined, t('video.status.processing'))}
+                  <LoadingDots aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                  </LoadingDots>
+                </StatusText>
                 <Button onClick={onCancel}>{t('common.cancel')}</Button>
               </StatusPanel>
             ) : (
@@ -1326,7 +1483,7 @@ const VideoPage: FC = () => {
                 </Tooltip>
                 <SendMessageButton
                   sendMessage={onGenerate}
-                  disabled={isLoading || isSelectedVideoLoading || !form.model}
+                  disabled={isLoading || isSelectedVideoLoading || !form.model || isPromptEmpty}
                 />
               </ToolbarMenu>
             </Toolbar>
@@ -1338,44 +1495,48 @@ const VideoPage: FC = () => {
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('video.no_history')} />
           ) : (
             <HistoryList>
-              {videos.map((video) => (
-                <HistoryItem
-                  key={video.id}
-                  $active={video.id === selectedVideo?.id}
-                  onClick={() => setVideoPageSelectedVideoId(video.id)}>
-                  <HistoryHeader>
-                    <HistoryModel>{video.model}</HistoryModel>
-                    <Tag color={video.status === 'completed' ? 'green' : video.status === 'failed' ? 'red' : 'blue'}>
-                      {t(VIDEO_STATUS_LABEL_KEYS[video.status])}
-                    </Tag>
-                  </HistoryHeader>
-                  <HistoryPrompt>{video.prompt}</HistoryPrompt>
-                  <HistoryActions>
-                    {(video.blobUrl || video.url) && (
-                      <Tooltip title={t('common.download')}>
+              {videos.map((video) => {
+                const videoStatus = getEffectiveVideoStatus(video) || video.status
+
+                return (
+                  <HistoryItem
+                    key={video.id}
+                    $active={video.id === selectedVideo?.id}
+                    onClick={() => setVideoPageSelectedVideoId(video.id)}>
+                    <HistoryHeader>
+                      <HistoryModel>{video.model}</HistoryModel>
+                      <Tag color={videoStatus === 'completed' ? 'green' : videoStatus === 'failed' ? 'red' : 'blue'}>
+                        {t(VIDEO_STATUS_LABEL_KEYS[videoStatus])}
+                      </Tag>
+                    </HistoryHeader>
+                    <HistoryPrompt>{video.prompt}</HistoryPrompt>
+                    <HistoryActions>
+                      {(video.blobUrl || video.url) && (
+                        <Tooltip title={t('common.download')}>
+                          <HistoryIconButton
+                            size="small"
+                            icon={<Download size={13} />}
+                            href={video.blobUrl || video.url}
+                            target="_blank"
+                            download
+                            onClick={(event) => event.stopPropagation()}
+                          />
+                        </Tooltip>
+                      )}
+                      <Tooltip title={t('common.delete')}>
                         <HistoryIconButton
                           size="small"
-                          icon={<Download size={13} />}
-                          href={video.blobUrl || video.url}
-                          target="_blank"
-                          download
-                          onClick={(event) => event.stopPropagation()}
+                          icon={<Trash2 size={13} />}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            deleteVideo(video.id)
+                          }}
                         />
                       </Tooltip>
-                    )}
-                    <Tooltip title={t('common.delete')}>
-                      <HistoryIconButton
-                        size="small"
-                        icon={<Trash2 size={13} />}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          deleteVideo(video.id)
-                        }}
-                      />
-                    </Tooltip>
-                  </HistoryActions>
-                </HistoryItem>
-              ))}
+                    </HistoryActions>
+                  </HistoryItem>
+                )
+              })}
             </HistoryList>
           )}
         </RightContainer>
@@ -1548,9 +1709,51 @@ const StatusTitle = styled.div`
 `
 
 const StatusText = styled.div`
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
   font-size: 13px;
   color: var(--color-text-2);
   word-break: break-word;
+`
+
+const LoadingDots = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+
+  span {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    animation: pentime-video-status-dot 1.2s ease-in-out infinite;
+  }
+
+  span:nth-child(2) {
+    animation-delay: 0.18s;
+  }
+
+  span:nth-child(3) {
+    animation-delay: 0.36s;
+  }
+
+  @keyframes pentime-video-status-dot {
+    0%,
+    80%,
+    100% {
+      opacity: 0.25;
+      transform: translateY(0);
+    }
+
+    40% {
+      opacity: 1;
+      transform: translateY(-3px);
+    }
+  }
 `
 
 const InputContainer = styled.div`

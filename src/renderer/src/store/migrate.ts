@@ -3477,6 +3477,25 @@ const migrateConfig = {
       logger.error('migrate 209 error', error as Error)
       return state
     }
+  },
+  '210': (state: RootState) => {
+    try {
+      const pentimeProvider = state.llm.providers.find((provider) => provider.id === SystemProviderIds['new-api'])
+      const shouldUseDefaultHost =
+        !pentimeProvider?.apiHost ||
+        ['http://localhost:3000', 'http://localhost:3000/'].includes(pentimeProvider.apiHost)
+
+      if (pentimeProvider && shouldUseDefaultHost) {
+        pentimeProvider.apiHost = 'https://www.pentime-api.com'
+        pentimeProvider.anthropicApiHost = 'https://www.pentime-api.com'
+      }
+
+      logger.info('migrate 210 success')
+      return state
+    } catch (error) {
+      logger.error('migrate 210 error', error as Error)
+      return state
+    }
   }
 }
 

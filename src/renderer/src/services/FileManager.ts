@@ -3,7 +3,7 @@ import db from '@renderer/databases'
 import i18n from '@renderer/i18n'
 import store from '@renderer/store'
 import type { FileMetadata } from '@renderer/types'
-import { getFileDirectory } from '@renderer/utils'
+import { getFileDirectory, getFileStorageName } from '@renderer/utils'
 import dayjs from 'dayjs'
 
 const logger = loggerService.withContext('FileManager')
@@ -31,19 +31,19 @@ class FileManager {
   }
 
   static async readBinaryImage(file: FileMetadata): Promise<Buffer> {
-    const fileData = await window.api.file.binaryImage(file.id + file.ext)
+    const fileData = await window.api.file.binaryImage(getFileStorageName(file))
     return fileData.data
   }
 
   static async readBase64File(file: FileMetadata): Promise<string> {
-    const fileData = await window.api.file.base64File(file.id + file.ext)
+    const fileData = await window.api.file.base64File(getFileStorageName(file))
     return fileData.data
   }
 
   static async addBase64File(file: FileMetadata): Promise<FileMetadata> {
     logger.info(`Adding base64 file: ${JSON.stringify(file)}`)
 
-    const base64File = await window.api.file.base64File(file.id + file.ext)
+    const base64File = await window.api.file.base64File(getFileStorageName(file))
     const fileRecord = await db.files.get(base64File.id)
 
     if (fileRecord) {
@@ -82,7 +82,7 @@ class FileManager {
 
     if (file) {
       const filesPath = store.getState().runtime.filesPath
-      file.path = filesPath + '/' + file.id + file.ext
+      file.path = filesPath + '/' + getFileStorageName(file)
     }
 
     return file
@@ -90,7 +90,7 @@ class FileManager {
 
   static getFilePath(file: FileMetadata) {
     const filesPath = store.getState().runtime.filesPath
-    return filesPath + '/' + file.id + file.ext
+    return filesPath + '/' + getFileStorageName(file)
   }
 
   static async deleteFile(id: string, force: boolean = false): Promise<void> {
@@ -112,7 +112,7 @@ class FileManager {
     await db.files.delete(id)
 
     try {
-      await window.api.file.delete(id + file.ext)
+      await window.api.file.delete(getFileStorageName(file))
     } catch (error) {
       logger.error('Failed to delete file:', error as Error)
     }
@@ -145,7 +145,17 @@ class FileManager {
 
   static getFileUrl(file: FileMetadata) {
     const filesPath = store.getState().runtime.filesPath
-    return 'file://' + filesPath + '/' + file.name
+    const filePath = file.path || `${filesPath}/${getFileStorageName(file)}`
+    const normalizedPath = filePath.replace(/\\/g, '/')
+    const prefix = normalizedPath.startsWith('/') ? 'file://' : 'file:///'
+
+    return (
+      prefix +
+      normalizedPath
+        .split('/')
+        .map((segment) => (/^[A-Za-z]:$/.test(segment) ? segment : encodeURIComponent(segment)))
+        .join('/')
+    )
   }
 
   static async updateFile(file: FileMetadata) {

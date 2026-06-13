@@ -8,9 +8,7 @@ export const isAzureResponsesEndpoint = (provider: AzureOpenAIProvider) => {
 }
 
 export const getClaudeSupportedProviders = (providers: Provider[]) => {
-  return providers.filter(
-    (p) => p.type === 'anthropic' || !!p.anthropicApiHost || CLAUDE_SUPPORTED_PROVIDERS.includes(p.id)
-  )
+  return providers.filter((p) => p.type === 'anthropic' || CLAUDE_SUPPORTED_PROVIDERS.includes(p.id))
 }
 
 export const getAnthropicSupportedProviders = (providers: Provider[]) => {
@@ -18,7 +16,7 @@ export const getAnthropicSupportedProviders = (providers: Provider[]) => {
 }
 
 export const isAnthropicSupportedProvider = (provider: Provider) => {
-  return provider.type === 'anthropic' || !!provider.anthropicApiHost
+  return provider.type === 'anthropic' || CLAUDE_SUPPORTED_PROVIDERS.includes(provider.id)
 }
 
 const NOT_SUPPORT_ARRAY_CONTENT_PROVIDERS = [

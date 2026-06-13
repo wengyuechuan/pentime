@@ -10,6 +10,7 @@ import {
 } from '@ant-design/icons'
 import { loggerService } from '@logger'
 import type { FileMetadata } from '@renderer/types'
+import { getFileStorageName } from '@renderer/utils'
 import { convertImageToPng } from '@renderer/utils/image'
 import { parseDataUrl } from '@shared/utils'
 import type { ImageProps as AntImageProps } from 'antd'
@@ -78,10 +79,8 @@ const createDownloadFilename = (src: string, blob: Blob, filename?: string) => {
   return `${Date.now()}_image.${getImageExtension(blob.type)}`
 }
 
-const getStoredFileId = (file: FileMetadata) => `${file.id}${file.ext?.startsWith('.') ? file.ext : `.${file.ext}`}`
-
 const readDownloadedImage = async (file: FileMetadata): Promise<ResolvedImageSource> => {
-  const base64File = await window.api.file.base64File(getStoredFileId(file))
+  const base64File = await window.api.file.base64File(getFileStorageName(file))
   const mimeType = normalizeImageMimeType(base64File.mime, file.origin_name || file.name || file.path)
   const bytes = Base64.toUint8Array(base64File.data)
 

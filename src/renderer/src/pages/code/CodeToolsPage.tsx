@@ -90,9 +90,9 @@ const CodeToolsPage: FC = () => {
         if (m.provider === 'silicon') {
           return isSiliconAnthropicCompatibleModel(m.id)
         }
-        // Check if model belongs to an anthropic type provider or has anthropicApiHost
+        // Only Anthropic providers, official compatible providers, or explicit Anthropic models can run via Claude Code.
         const modelProvider = providers.find((p) => p.id === m.provider)
-        if (modelProvider?.type === 'anthropic' || modelProvider?.anthropicApiHost) {
+        if (modelProvider?.type === 'anthropic') {
           return true
         }
         return m.id.includes('claude') || CLAUDE_OFFICIAL_SUPPORTED_PROVIDERS.includes(m.provider)

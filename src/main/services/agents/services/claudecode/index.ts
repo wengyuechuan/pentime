@@ -20,7 +20,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk'
 import type { Base64ImageSource, ContentBlockParam } from '@anthropic-ai/sdk/resources/messages/messages'
 import { loggerService } from '@logger'
 import { config as apiConfigService } from '@main/apiServer/config'
-import { validateModelId } from '@main/apiServer/utils'
+import { getProviderAnthropicModelChecker, validateModelId } from '@main/apiServer/utils'
 import { isWin } from '@main/constant'
 import AssistantServer from '@main/mcpServers/assistant'
 import ClawServer from '@main/mcpServers/claw'
@@ -42,6 +42,7 @@ import {
   SOUL_MODE_DISALLOWED_TOOLS
 } from '@shared/agents/claudecode/constants'
 import { languageEnglishNameMap } from '@shared/config/languages'
+import { CLAUDE_SUPPORTED_PROVIDERS } from '@shared/config/providers'
 import { withoutTrailingApiVersion } from '@shared/utils'
 import { app } from 'electron'
 
@@ -161,16 +162,31 @@ class ClaudeCodeService implements AgentServiceInterface {
 
     const isAzureOpenAI = provider.type === 'azure-openai'
     const isAnthropicType = provider.type === 'anthropic'
-    const hasAnthropicHost = provider.anthropicApiHost?.trim()
+    const selectedModel = provider.models?.find((model) => model.id === modelInfo.modelId)
+    const isExplicitAnthropicModel =
+      selectedModel?.endpoint_type === 'anthropic' ||
+      selectedModel?.supported_endpoint_types?.includes('anthropic') === true
+    const supportsAnthropicModel =
+      isAnthropicType ||
+      isAzureOpenAI ||
+      (selectedModel &&
+        (CLAUDE_SUPPORTED_PROVIDERS.includes(provider.id)
+          ? getProviderAnthropicModelChecker(provider.id)(selectedModel)
+          : isExplicitAnthropicModel))
 
-    if (!isAnthropicType && !isAzureOpenAI && !hasAnthropicHost) {
+    if (!supportsAnthropicModel) {
       logger.error('Anthropic provider configuration is missing', {
-        modelInfo
+        modelInfo,
+        providerType: provider.type,
+        endpointType: selectedModel?.endpoint_type,
+        supportedEndpointTypes: selectedModel?.supported_endpoint_types
       })
 
       aiStream.emit('data', {
         type: 'error',
-        error: new Error(`Invalid provider type '${provider.type}'. Expected 'anthropic' provider type.`)
+        error: new Error(
+          `Model '${session.model}' does not support the Anthropic Messages endpoint required by Claude Code.`
+        )
       })
       return aiStream
     }

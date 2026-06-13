@@ -331,6 +331,53 @@ describe('OpenClawService gateway status state machine', () => {
 
   // ─── stopGateway ─────────────────────────────────────────────
 
+  describe('API type detection', () => {
+    it('uses OpenAI completions for new-api models unless the model endpoint is explicitly Anthropic', () => {
+      const provider = {
+        id: 'new-api',
+        name: 'Pen time',
+        type: 'new-api',
+        apiKey: 'sk-test',
+        apiHost: 'https://www.pentime-api.com',
+        anthropicApiHost: 'https://www.pentime-api.com',
+        models: [],
+        enabled: true
+      }
+      const model = {
+        id: 'gpt-5.4',
+        name: 'gpt-5.4',
+        provider: 'new-api'
+      }
+
+      const apiType = (service as any).determineApiType(provider, model)
+
+      expect(apiType).toBe('openai-completions')
+    })
+
+    it('uses Anthropic messages when the selected mixed-provider model declares endpoint_type=anthropic', () => {
+      const provider = {
+        id: 'new-api',
+        name: 'Pen time',
+        type: 'new-api',
+        apiKey: 'sk-test',
+        apiHost: 'https://www.pentime-api.com',
+        anthropicApiHost: 'https://www.pentime-api.com',
+        models: [],
+        enabled: true
+      }
+      const model = {
+        id: 'claude-sonnet-4-6',
+        name: 'claude-sonnet-4-6',
+        provider: 'new-api',
+        endpoint_type: 'anthropic'
+      }
+
+      const apiType = (service as any).determineApiType(provider, model)
+
+      expect(apiType).toBe('anthropic-messages')
+    })
+  })
+
   describe('stopGateway', () => {
     it('transitions to stopped on successful stop', async () => {
       // @ts-expect-error -- accessing private field

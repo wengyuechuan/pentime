@@ -996,8 +996,7 @@ class OpenClawService {
    * Priority order:
    * 1. Provider type (anthropic, vertex-anthropic always use Anthropic API)
    * 2. Model endpoint_type (explicit endpoint configuration)
-   * 3. Provider has anthropicApiHost configured
-   * 4. Default to OpenAI-compatible
+   * 3. Default to OpenAI-compatible
    */
   private determineApiType(provider: Provider, model: Model): string {
     // 1. Check if provider type is always Anthropic
@@ -1010,16 +1009,11 @@ class OpenClawService {
       return OPENCLAW_API_TYPES.ANTHROPIC
     }
 
-    // 3. Check if provider has anthropicApiHost configured
-    if (provider.anthropicApiHost) {
-      return OPENCLAW_API_TYPES.ANTHROPIC
-    }
-
     if (provider.type === 'openai-response') {
       return OPENCLAW_API_TYPES.OPENAI_RESPOSNE
     }
 
-    // 4. Default to OpenAI-compatible
+    // 3. Default to OpenAI-compatible
     return OPENCLAW_API_TYPES.OPENAI
   }
 

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatFileSize, getFileDirectory, getFileExtension, removeSpecialCharactersForFileName } from '../file'
+import {
+  formatFileSize,
+  getFileDirectory,
+  getFileExtension,
+  getFileStorageName,
+  removeSpecialCharactersForFileName
+} from '../file'
 
 describe('file', () => {
   describe('getFileDirectory', () => {
@@ -114,6 +120,21 @@ describe('file', () => {
     it('should return empty string for empty input', () => {
       // 验证空字符串
       expect(removeSpecialCharactersForFileName('')).toBe('')
+    })
+  })
+
+  describe('getFileStorageName', () => {
+    it('should prefer stored file name', () => {
+      expect(getFileStorageName({ id: 'abc', name: 'abc.png', ext: 'png' })).toBe('abc.png')
+    })
+
+    it('should add normalized extension when name is missing', () => {
+      expect(getFileStorageName({ id: 'abc', name: '', ext: 'png' })).toBe('abc.png')
+      expect(getFileStorageName({ id: 'abc', name: '', ext: '.jpg' })).toBe('abc.jpg')
+    })
+
+    it('should not duplicate extension when id already includes it', () => {
+      expect(getFileStorageName({ id: 'abc.png', name: '', ext: 'png' })).toBe('abc.png')
     })
   })
 })

@@ -1,6 +1,7 @@
 import type { Assistant, FileMetadata, Usage } from '@renderer/types'
 import { FILE_TYPE } from '@renderer/types'
 import type { Message } from '@renderer/types/newMessage'
+import { getFileStorageName } from '@renderer/utils'
 import { findFileBlocks, getMainTextContent, getThinkingContent } from '@renderer/utils/messageUtils/find'
 import { flatten, takeRight } from 'lodash'
 import { approximateTokenSize } from 'tokenx'
@@ -20,7 +21,7 @@ async function getFileContent(file: FileMetadata) {
   }
 
   if (file.type === FILE_TYPE.TEXT) {
-    return await window.api.file.read(file.id + file.ext, true)
+    return await window.api.file.read(getFileStorageName(file), true)
   }
 
   return ''

@@ -9,6 +9,7 @@ import { getProviderByModel } from '@renderer/services/AssistantService'
 import type { FileMetadata, Message, Model } from '@renderer/types'
 import { FILE_TYPE } from '@renderer/types'
 import type { FileMessageBlock } from '@renderer/types/newMessage'
+import { getFileStorageName } from '@renderer/utils/file'
 import { findFileBlocks } from '@renderer/utils/messageUtils/find'
 import type { FilePart, TextPart } from 'ai'
 import i18n from 'i18next'
@@ -34,7 +35,7 @@ export async function extractFileContent(message: Message): Promise<string> {
 
       for (const fileBlock of textFileBlocks) {
         const file = fileBlock.file
-        const fileContent = (await window.api.file.read(file.id + file.ext)).trim()
+        const fileContent = (await window.api.file.read(getFileStorageName(file))).trim()
         const fileNameRow = 'file: ' + file.origin_name + '\n\n'
         text = text + fileNameRow + fileContent + divider
       }
@@ -55,7 +56,7 @@ export async function convertFileBlockToTextPart(fileBlock: FileMessageBlock): P
   // 处理文本文件
   if (file.type === FILE_TYPE.TEXT) {
     try {
-      const fileContent = await window.api.file.read(file.id + file.ext)
+      const fileContent = await window.api.file.read(getFileStorageName(file))
       return {
         type: 'text',
         text: `${file.origin_name}\n${fileContent.trim()}`
@@ -68,7 +69,7 @@ export async function convertFileBlockToTextPart(fileBlock: FileMessageBlock): P
   // 处理文档文件（PDF、Word、Excel等）- 提取为文本内容
   if (file.type === FILE_TYPE.DOCUMENT) {
     try {
-      const fileContent = await window.api.file.read(file.id + file.ext, true) // true表示强制文本提取
+      const fileContent = await window.api.file.read(getFileStorageName(file), true) // true表示强制文本提取
       return {
         type: 'text',
         text: `${file.origin_name}\n${fileContent.trim()}`
@@ -230,7 +231,7 @@ export async function convertFileBlockToFilePart(fileBlock: FileMessageBlock, mo
         }
       }
 
-      const base64Data = await window.api.file.base64File(file.id + file.ext)
+      const base64Data = await window.api.file.base64File(getFileStorageName(file))
 
       return {
         type: 'file',
@@ -248,7 +249,7 @@ export async function convertFileBlockToFilePart(fileBlock: FileMessageBlock, mo
         return null
       }
 
-      const base64Data = await window.api.file.base64Image(file.id + file.ext)
+      const base64Data = await window.api.file.base64Image(getFileStorageName(file))
 
       // 处理MIME类型，特别是jpg->jpeg的转换（Anthropic要求）
       let mediaType = base64Data.mime

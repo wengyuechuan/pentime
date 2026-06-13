@@ -157,6 +157,10 @@ export const renameAgentSessionIfNeeded = async (
   getState: () => RootState,
   options: { force?: boolean } = {}
 ): Promise<void> => {
+  if (!options.force) {
+    return
+  }
+
   const lockId = `${agentSession.agentId}:${agentSession.sessionId}`
   if (agentSessionRenameLocks.has(lockId)) {
     return

@@ -31,7 +31,7 @@ import FileManager from '@renderer/services/FileManager'
 import { translateText } from '@renderer/services/TranslateService'
 import type { Model, PaintingAction, PaintingsState } from '@renderer/types'
 import type { FileMetadata } from '@renderer/types'
-import { getErrorMessage, uuid } from '@renderer/utils'
+import { getErrorMessage, getFileStorageName, uuid } from '@renderer/utils'
 import { isSendMessageKeyPressed } from '@renderer/utils/input'
 import { isNewApiProvider } from '@renderer/utils/provider'
 import { Avatar, Button, Empty, InputNumber, Segmented, Select, Upload } from 'antd'
@@ -110,6 +110,10 @@ const getImageGenerationProgressText = (progress: number) => {
   return '正在保存生成图片'
 }
 
+const isProcessingPainting = (painting: PaintingAction) => {
+  return painting.generationStatus === 'processing' && (painting.generationProgress ?? 0) < 100
+}
+
 const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
   const [mode, setMode] = useState<keyof PaintingsState>('openai_image_generate')
   const { addPainting, removePainting, updatePainting, openai_image_generate, openai_image_edit } = usePaintings()
@@ -147,8 +151,21 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
     [newApiPaintings, mode, newApiProvider.id]
   )
   const [painting, setPainting] = useState<PaintingAction>({ ...DEFAULT_PAINTING, providerId: newApiProvider.id })
+  const currentModeProcessingPainting = useMemo(() => filteredPaintings.find(isProcessingPainting), [filteredPaintings])
+  const editProcessingPainting = useMemo(
+    () =>
+      (newApiPaintings.openai_image_edit || []).find(
+        (item) => item.providerId === newApiProvider.id && isProcessingPainting(item)
+      ),
+    [newApiPaintings.openai_image_edit, newApiProvider.id]
+  )
   const activeGenerationTask = getNewApiGenerationTask(painting.id)
-  const isLoading = !!activeGenerationTask
+  const isPersistedGenerationLoading =
+    painting.generationStatus === 'processing' &&
+    painting.files.length === 0 &&
+    (painting.generationProgress ?? 0) < 100
+  const isLoading = !!activeGenerationTask || isPersistedGenerationLoading
+  const isPromptEmpty = !painting.prompt?.trim()
 
   const modeOptions = [
     { label: t('paintings.mode.generate'), value: 'openai_image_generate' },
@@ -176,7 +193,7 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
       try {
         const files = await Promise.all(
           painting.files.map(async (file, index) => {
-            const { data, mime } = await window.api.file.binaryImage(file.id + file.ext)
+            const { data, mime } = await window.api.file.binaryImage(getFileStorageName(file))
             const fileName = file.name || `image_${index + 1}${file.ext}`
 
             return new File([data], fileName, {
@@ -633,7 +650,7 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const isEnterPressed = event.key === 'Enter' && !event.nativeEvent.isComposing
-    if (isEnterPressed && isSendMessageKeyPressed(event, sendMessageShortcut) && !isLoading) {
+    if (isEnterPressed && isSendMessageKeyPressed(event, sendMessageShortcut) && !isLoading && !isPromptEmpty) {
       event.preventDefault()
       void onGenerate()
       return
@@ -715,6 +732,15 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
   }
 
   useEffect(() => {
+    if (mode === 'openai_image_edit' || currentModeProcessingPainting || !editProcessingPainting) {
+      return
+    }
+
+    setMode('openai_image_edit')
+    setPainting(editProcessingPainting)
+  }, [currentModeProcessingPainting, editProcessingPainting, mode])
+
+  useEffect(() => {
     if (filteredPaintings.length === 0) {
       const newPainting = getNewPainting()
       addPainting(mode, newPainting)
@@ -724,11 +750,13 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
       const found = filteredPaintings.find((p) => p.id === painting.id)
       if (found) {
         setPainting(found)
+      } else if (currentModeProcessingPainting) {
+        setPainting(currentModeProcessingPainting)
       } else {
         setPainting(filteredPaintings[0])
       }
     }
-  }, [filteredPaintings, mode, addPainting, getNewPainting, painting.id])
+  }, [currentModeProcessingPainting, filteredPaintings, mode, addPainting, getNewPainting, painting.id])
 
   useEffect(() => {
     isMountedRef.current = true
@@ -976,7 +1004,7 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
                   isLoading={isTranslating}
                   style={{ marginRight: 6, borderRadius: '50%' }}
                 />
-                <SendMessageButton sendMessage={onGenerate} disabled={isLoading} />
+                <SendMessageButton sendMessage={onGenerate} disabled={isLoading || !painting.model || isPromptEmpty} />
               </ToolbarMenu>
             </Toolbar>
           </InputContainer>

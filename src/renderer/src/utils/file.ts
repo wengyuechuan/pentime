@@ -75,6 +75,20 @@ export function removeSpecialCharactersForFileName(str: string): string {
     .trim()
 }
 
+export function getFileStorageName(file: Pick<FileMetadata, 'id' | 'name' | 'ext'>): string {
+  if (file.name?.trim()) {
+    return file.name
+  }
+
+  const ext = file.ext ? (file.ext.startsWith('.') ? file.ext : `.${file.ext}`) : ''
+
+  if (!ext || file.id.toLowerCase().endsWith(ext.toLowerCase())) {
+    return file.id
+  }
+
+  return `${file.id}${ext}`
+}
+
 /**
  * 检查文件是否为支持的类型。
  * 支持的文件类型包括:

@@ -30,14 +30,15 @@ export const SUPPORTED_MODELS = [
 ]
 
 const GPT_IMAGE_2_SIZES = [
+  { value: 'auto', label: 'Auto[自动]' },
   { value: '1024x1024', label: '1024x1024' },
   { value: '1536x1024', label: '1536x1024' },
   { value: '1024x1536', label: '1024x1536' },
   { value: '2048x2048', label: '2K 2048x2048' },
   { value: '2048x1152', label: '2K 2048x1152' },
+  { value: '1152x2048', label: '2K 1152x2048' },
   { value: '3840x2160', label: '4K 3840x2160' },
-  { value: '2160x3840', label: '4K 2160x3840' },
-  { value: 'auto', label: 'auto' }
+  { value: '2160x3840', label: '4K 2160x3840' }
 ]
 
 const GPT_IMAGE_QUALITY = [{ value: 'auto' }, { value: 'high' }, { value: 'medium' }, { value: 'low' }]

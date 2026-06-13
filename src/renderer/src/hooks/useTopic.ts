@@ -1,26 +1,19 @@
 import { loggerService } from '@logger'
 import db from '@renderer/databases'
-import i18n from '@renderer/i18n'
-import { fetchMessagesSummary } from '@renderer/services/ApiService'
 import { EVENT_NAMES, EventEmitter } from '@renderer/services/EventService'
 import { safeDeleteFiles } from '@renderer/services/MessagesService'
 import store from '@renderer/store'
-import { updateTopic } from '@renderer/store/assistants'
 import { setNewlyRenamedTopics, setRenamingTopics } from '@renderer/store/runtime'
 import { loadTopicMessagesThunk } from '@renderer/store/thunk/messageThunk'
 import type { Assistant, FileMetadata, Topic } from '@renderer/types'
 import type { FileMessageBlock, ImageMessageBlock } from '@renderer/types/newMessage'
 import { MessageBlockType } from '@renderer/types/newMessage'
-import { findMainTextBlocks } from '@renderer/utils/messageUtils/find'
-import { truncateText } from '@renderer/utils/naming'
-import { find, isEmpty } from 'lodash'
-import { type Dispatch, type SetStateAction, useEffect, useState } from 'react'
+import { find } from 'lodash'
+import { useEffect, useState } from 'react'
 
 import { useAssistant } from './useAssistant'
-import { getStoreSetting } from './useSettings'
 
 let _activeTopic: Topic
-let _setActiveTopic: Dispatch<SetStateAction<Topic>>
 
 const logger = loggerService.withContext('useTopic')
 
@@ -29,7 +22,6 @@ export function useActiveTopic(assistantId: string, topic?: Topic) {
   const [activeTopic, setActiveTopic] = useState(topic || _activeTopic || assistant?.topics[0])
 
   _activeTopic = activeTopic
-  _setActiveTopic = setActiveTopic
 
   useEffect(() => {
     if (activeTopic) {
@@ -113,79 +105,8 @@ export const finishTopicRenaming = (topicId: string) => {
   }, 700)
 }
 
-const topicRenamingLocks = new Set<string>()
-
-export const autoRenameTopic = async (assistant: Assistant, topicId: string) => {
-  if (topicRenamingLocks.has(topicId)) {
-    return
-  }
-
-  try {
-    topicRenamingLocks.add(topicId)
-
-    const topic = await getTopicById(topicId)
-    const enableTopicNaming = getStoreSetting('enableTopicNaming')
-
-    if (isEmpty(topic.messages)) {
-      return
-    }
-
-    if (topic.isNameManuallyEdited) {
-      return
-    }
-
-    const applyTopicName = (name: string) => {
-      const data = { ...topic, name } as Topic
-      if (topic.id === _activeTopic.id) {
-        _setActiveTopic(data)
-      }
-      store.dispatch(updateTopic({ assistantId: assistant.id, topic: data }))
-    }
-
-    const getFirstMessageName = () => {
-      const message = topic.messages[0]
-      const blocks = findMainTextBlocks(message)
-      const text = blocks
-        .map((block) => block.content)
-        .join('\n\n')
-        .trim()
-
-      return truncateText(text)
-    }
-
-    if (!enableTopicNaming) {
-      const topicName = getFirstMessageName()
-      if (topicName) {
-        try {
-          startTopicRenaming(topicId)
-          applyTopicName(topicName)
-        } finally {
-          finishTopicRenaming(topicId)
-        }
-      }
-      return
-    }
-
-    if (topic && topic.name === i18n.t('chat.default.topic.name') && topic.messages.length >= 2) {
-      startTopicRenaming(topicId)
-      try {
-        const { text: summaryText, error } = await fetchMessagesSummary({ messages: topic.messages })
-        if (summaryText) {
-          applyTopicName(summaryText)
-        } else {
-          if (error) logger.warn('Failed to auto rename topic, fallback to first message', { error })
-          const fallbackName = getFirstMessageName()
-          if (fallbackName) {
-            applyTopicName(fallbackName)
-          }
-        }
-      } finally {
-        finishTopicRenaming(topicId)
-      }
-    }
-  } finally {
-    topicRenamingLocks.delete(topicId)
-  }
+export const autoRenameTopic = async (_assistant: Assistant, _topicId: string) => {
+  return
 }
 
 // Convert class to object with functions since class only has static methods

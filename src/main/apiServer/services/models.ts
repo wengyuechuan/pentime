@@ -1,4 +1,4 @@
-import { isEmpty } from 'lodash'
+import { CLAUDE_SUPPORTED_PROVIDERS } from '@shared/config/providers'
 
 import type { ApiModel, ApiModelsFilter, ApiModelsResponse } from '../../../renderer/src/types/apiModels'
 import { loggerService } from '../../services/LoggerService'
@@ -23,7 +23,7 @@ export class ModelsService {
       let providers = await getAvailableProviders()
 
       if (filter.providerType === 'anthropic') {
-        providers = providers.filter((p) => p.type === 'anthropic' || !isEmpty(p.anthropicApiHost?.trim()))
+        providers = providers.filter((p) => p.type === 'anthropic' || CLAUDE_SUPPORTED_PROVIDERS.includes(p.id))
       }
 
       const models = await listAllAvailableModels(providers)

@@ -366,8 +366,8 @@ export const SYSTEM_PROVIDERS_CONFIG: Record<SystemProviderId, SystemProvider> =
     name: 'Pen time',
     type: 'new-api',
     apiKey: '',
-    apiHost: 'http://localhost:3000',
-    anthropicApiHost: 'http://localhost:3000',
+    apiHost: 'https://www.pentime-api.com',
+    anthropicApiHost: 'https://www.pentime-api.com',
     models: SYSTEM_MODELS['new-api'],
     isSystem: true,
     enabled: false
