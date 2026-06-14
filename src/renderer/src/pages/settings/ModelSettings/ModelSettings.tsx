@@ -22,7 +22,6 @@ import { useTranslation } from 'react-i18next'
 import { SettingContainer, SettingDescription, SettingGroup, SettingTitle } from '..'
 import TranslateSettingsPopup from '../TranslateSettingsPopup/TranslateSettingsPopup'
 import DefaultAssistantSettings from './DefaultAssistantSettings'
-import TopicNamingModalPopup from './QuickModelPopup'
 
 interface ModelSettingsProps {
   showSettingsButton?: boolean
@@ -116,9 +115,6 @@ const ModelSettings: FC<ModelSettingsProps> = ({
             onChange={(value) => setQuickModel(find(allModels, JSON.parse(value)) as Model)}
             placeholder={t('settings.models.empty')}
           />
-          {showSettingsButton && (
-            <Button icon={<Settings2 size={16} />} style={{ marginLeft: 8 }} onClick={TopicNamingModalPopup.show} />
-          )}
         </HStack>
         {showDescription && <SettingDescription>{t('settings.models.quick_model.description')}</SettingDescription>}
       </SettingGroup>

@@ -3496,6 +3496,17 @@ const migrateConfig = {
       logger.error('migrate 210 error', error as Error)
       return state
     }
+  },
+  '211': (state: RootState) => {
+    try {
+      state.settings.enableTopicNaming = false
+      state.settings.pinTopicsToTop = true
+      logger.info('migrate 211 success')
+      return state
+    } catch (error) {
+      logger.error('migrate 211 error', error as Error)
+      return state
+    }
   }
 }
 

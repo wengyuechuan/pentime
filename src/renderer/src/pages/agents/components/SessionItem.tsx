@@ -6,20 +6,18 @@ import { useInPlaceEdit } from '@renderer/hooks/useInPlaceEdit'
 import { useRuntime } from '@renderer/hooks/useRuntime'
 import { useSettings } from '@renderer/hooks/useSettings'
 import { useTimer } from '@renderer/hooks/useTimer'
-import { finishTopicRenaming, startTopicRenaming } from '@renderer/hooks/useTopic'
 import { SessionSettingsPopup } from '@renderer/pages/settings/AgentSettings'
 import { SessionLabel } from '@renderer/pages/settings/AgentSettings/shared'
-import store, { type RootState, useAppDispatch, useAppSelector } from '@renderer/store'
+import { type RootState, useAppDispatch, useAppSelector } from '@renderer/store'
 import { newMessagesActions } from '@renderer/store/newMessage'
-import { loadTopicMessagesThunk, renameAgentSessionIfNeeded } from '@renderer/store/thunk/messageThunk'
 import type { AgentSessionEntity } from '@renderer/types'
 import { classNames } from '@renderer/utils'
 import { getChannelTypeIcon } from '@renderer/utils/agentSession'
 import { buildAgentSessionTopicId } from '@renderer/utils/agentSession'
 import type { MenuProps } from 'antd'
 import { Dropdown, Tooltip } from 'antd'
-import { MenuIcon, Sparkles, XIcon } from 'lucide-react'
-import React, { memo, startTransition, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { MenuIcon, XIcon } from 'lucide-react'
+import React, { memo, startTransition, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import styled from 'styled-components'
 
@@ -41,8 +39,6 @@ const SessionItem = ({ session, agentId, channelType, onDelete, onPress }: Sessi
   const activeSessionId = chat.activeSessionIdMap[agentId]
   const [isConfirmingDeletion, setIsConfirmingDeletion] = useState(false)
   const { setTimeoutTimer } = useTimer()
-  const [_targetSession, setTargetSession] = useState<AgentSessionEntity>(session)
-  const targetSession = useDeferredValue(_targetSession)
   const dispatch = useAppDispatch()
 
   const { isEditing, isSaving, startEdit, inputProps } = useInPlaceEdit({
@@ -134,24 +130,6 @@ const SessionItem = ({ session, agentId, channelType, onDelete, onPress }: Sessi
         }
       },
       {
-        label: t('chat.topics.auto_rename'),
-        key: 'auto-rename',
-        icon: <Sparkles size={14} />,
-        onClick: async () => {
-          const agentSession = {
-            agentId: agentId,
-            sessionId: targetSession.id
-          }
-          void dispatch(loadTopicMessagesThunk(sessionTopicId))
-          try {
-            startTopicRenaming(sessionTopicId)
-            await renameAgentSessionIfNeeded(agentSession, sessionTopicId, store.getState, { force: true })
-          } finally {
-            finishTopicRenaming(sessionTopicId)
-          }
-        }
-      },
-      {
         label: t('settings.topic.position.label'),
         key: 'topic-position',
         icon: <MenuIcon size={14} />,
@@ -178,7 +156,7 @@ const SessionItem = ({ session, agentId, channelType, onDelete, onPress }: Sessi
         }
       }
     ],
-    [agentId, dispatch, onDelete, session.id, sessionTopicId, setTopicPosition, t, targetSession.id]
+    [agentId, onDelete, session.id, setTopicPosition, t]
   )
 
   return (
@@ -191,7 +169,6 @@ const SessionItem = ({ session, agentId, channelType, onDelete, onPress }: Sessi
         onClick={isEditing ? undefined : onPress}
         onDoubleClick={() => startEdit(session.name ?? '')}
         title={session.name ?? session.id}
-        onContextMenu={() => setTargetSession(session)}
         style={{
           borderRadius: 'var(--list-item-border-radius)',
           cursor: isEditing ? 'default' : 'pointer'

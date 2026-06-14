@@ -380,16 +380,6 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
   const onGenerate = async () => {
     await checkProviderEnabled(newApiProvider, t)
 
-    if (painting.files.length > 0) {
-      const confirmed = await window.modal.confirm({
-        content: t('paintings.regenerate.confirm'),
-        centered: true
-      })
-
-      if (!confirmed) return
-      await FileManager.deleteFiles(painting.files)
-    }
-
     const prompt = textareaRef.current?.resizableTextArea?.textArea?.value || ''
 
     const AI = new AiProvider(newApiProvider)
@@ -411,16 +401,28 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
       return
     }
 
+    if (mode === 'openai_image_generate' && painting.files.length > 0) {
+      const confirmed = await window.modal.confirm({
+        content: t('paintings.regenerate.confirm'),
+        centered: true
+      })
+
+      if (!confirmed) return
+      await FileManager.deleteFiles(painting.files)
+    }
+
     const controller = new AbortController()
     const generationNamespace = mode
     const paintingId = painting.id
+    const editSourceFiles = mode === 'openai_image_edit' ? [...painting.files] : []
+    let editSourceFilesReleased = false
     let progress = 8
     let taskPainting: PaintingAction = {
       ...painting,
       providerId: newApiProvider.id,
       prompt,
-      files: [],
-      urls: [],
+      files: mode === 'openai_image_edit' ? painting.files : [],
+      urls: mode === 'openai_image_edit' ? painting.urls : [],
       generationProgress: progress,
       generationStatus: 'processing',
       generationMessage: getImageGenerationProgressText(progress)
@@ -431,6 +433,29 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
       updatePainting(generationNamespace, taskPainting)
       if (isMountedRef.current) {
         setPainting((prev) => (prev.id === paintingId ? taskPainting : prev))
+      }
+    }
+
+    const releaseSharedEditSourceFiles = async () => {
+      if (editSourceFilesReleased || editSourceFiles.length === 0) {
+        return
+      }
+
+      editSourceFilesReleased = true
+
+      try {
+        const releasableFiles: FileMetadata[] = []
+
+        for (const file of editSourceFiles) {
+          const fileRecord = await FileManager.getFile(file.id)
+          if ((fileRecord?.count ?? 0) > 1) {
+            releasableFiles.push(file)
+          }
+        }
+
+        await FileManager.deleteFiles(releasableFiles)
+      } catch (error) {
+        logger.error('Failed to release edit source images:', error as Error)
       }
     }
 
@@ -540,6 +565,7 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
         updateProgress(92)
         const validFiles = await downloadImages(urls)
         await FileManager.addFiles(validFiles)
+        await releaseSharedEditSourceFiles()
         updateGenerationPainting({
           files: validFiles,
           urls,
@@ -557,6 +583,7 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
           })
         )
         await FileManager.addFiles(validFiles)
+        await releaseSharedEditSourceFiles()
         updateGenerationPainting({
           files: validFiles,
           urls: [],
@@ -683,10 +710,11 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
   }
 
   // 处理模式切换
-  const handleModeChange = (value: string) => {
+  const handleModeChange = async (value: string) => {
     const nextMode = value as keyof PaintingsState
 
     setMode(nextMode)
+    setCurrentImageIndex(0)
 
     if (nextMode === 'openai_image_edit' && mode === 'openai_image_generate' && painting.files.length > 0) {
       const existingEditPainting = findPaintingByFiles(
@@ -700,9 +728,17 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
         return
       }
 
+      let referencedFiles = painting.files
+      try {
+        referencedFiles = await FileManager.addFiles(painting.files)
+      } catch (error) {
+        logger.error('Failed to retain edit source images:', error as Error)
+      }
+
       const seededPainting = {
         ...painting,
         id: uuid(),
+        files: referencedFiles,
         providerId: newApiProvider.id
       }
 
@@ -757,6 +793,16 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
       }
     }
   }, [currentModeProcessingPainting, filteredPaintings, mode, addPainting, getNewPainting, painting.id])
+
+  useEffect(() => {
+    setCurrentImageIndex(0)
+  }, [mode, painting.id])
+
+  useEffect(() => {
+    if (currentImageIndex > 0 && currentImageIndex >= painting.files.length) {
+      setCurrentImageIndex(0)
+    }
+  }, [currentImageIndex, painting.files.length])
 
   useEffect(() => {
     isMountedRef.current = true

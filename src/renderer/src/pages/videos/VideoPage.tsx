@@ -96,34 +96,14 @@ type VideoEndpoints = {
 }
 
 const VIDEO_SIZE_OPTIONS = ['1280x720', '720x1280', '1920x1080', '1080x1920']
-const VIDEO_TASK_STATUS_LABELS: Record<string, string> = {
-  NOT_START: '未开始',
-  SUBMITTED: '已提交',
-  QUEUED: '排队中',
-  IN_PROGRESS: '处理中',
-  SUCCESS: '成功',
-  FAILURE: '失败',
-  UNKNOWN: '未知',
-  PENDING: '未开始',
-  PROCESSING: '处理中',
-  COMPLETED: '成功',
-  COMPLETE: '成功',
-  SUCCEEDED: '成功',
-  DONE: '成功',
-  FINISHED: '成功',
-  FAILED: '失败',
-  ERROR: '失败',
-  CANCELLED: '失败',
-  CANCELED: '失败'
-}
 const VIDEO_TASK_PROGRESS_LABELS: Record<string, string> = {
-  NOT_START: 'Pentime未开始 请勿取消',
-  SUBMITTED: 'Pentime已提交 请勿取消',
-  QUEUED: 'Pentime排队中 请勿取消',
-  IN_PROGRESS: 'Pentime处理中 请勿取消',
-  PENDING: 'Pentime未开始 请勿取消',
-  PROCESSING: 'Pentime处理中 请勿取消',
-  UNKNOWN: 'Pentime处理中 请勿取消'
+  NOT_START: '[Pentime] 未开始 请稍候',
+  SUBMITTED: '[Pentime] 已提交 请稍候',
+  QUEUED: '[Pentime] 排队中 请稍候',
+  IN_PROGRESS: '[Pentime] 处理中 请稍候',
+  PENDING: '[Pentime] 未开始 请稍候',
+  PROCESSING: '[Pentime] 处理中 请稍候',
+  UNKNOWN: '[Pentime] 处理中 请稍候'
 }
 const MAX_POLL_COUNT = 120
 const POLL_INTERVAL_MS = 3000
@@ -383,20 +363,56 @@ const normalizeTaskStatus = (status?: string) =>
     .replace(/[-\s]+/g, '_')
     .toUpperCase()
 
-const getVideoTaskStatusLabel = (status?: string) => {
-  const normalizedStatus = normalizeTaskStatus(status)
-  if (!normalizedStatus) return undefined
-  return VIDEO_TASK_PROGRESS_LABELS[normalizedStatus] || VIDEO_TASK_STATUS_LABELS[normalizedStatus]
+const getVideoProgressStatusLabelFromText = (value?: string) => {
+  const text = value?.trim()
+  if (!text) return undefined
+
+  const normalizedStatus = normalizeTaskStatus(text)
+  if (normalizedStatus && VIDEO_TASK_PROGRESS_LABELS[normalizedStatus]) {
+    return VIDEO_TASK_PROGRESS_LABELS[normalizedStatus]
+  }
+
+  if (/(\u672a\u5f00\u59cb|\u672a\u958b\u59cb|not_start|pending)/i.test(text)) {
+    return VIDEO_TASK_PROGRESS_LABELS.NOT_START
+  }
+
+  if (/(\u5df2\u63d0\u4ea4|\u63d0\u4ea4|submitted)/i.test(text)) {
+    return VIDEO_TASK_PROGRESS_LABELS.SUBMITTED
+  }
+
+  if (/(\u6392\u961f|\u6392\u968a|queued|queue)/i.test(text)) {
+    return VIDEO_TASK_PROGRESS_LABELS.QUEUED
+  }
+
+  if (
+    /(\u5904\u7406\u4e2d|\u8655\u7406\u4e2d|\u751f\u6210\u4e2d|\u6b63\u5728\u751f\u6210|in_progress|processing)/i.test(
+      text
+    )
+  ) {
+    return VIDEO_TASK_PROGRESS_LABELS.IN_PROGRESS
+  }
+
+  return undefined
+}
+
+const normalizeVideoProgressDisplayText = (value?: string) => {
+  const text = value?.trim()
+  if (!text) return undefined
+
+  return getVideoProgressStatusLabelFromText(text) || text.replace(/\s*(?:\.{3}|\u2026{1,3})\s*$/, '').trim()
 }
 
 const getVideoProgressText = (status?: string, message?: string, fallback?: string) => {
   const normalizedStatus = normalizeTaskStatus(status)
+  const normalizedFallback =
+    fallback && /[\u4e00-\u9fa5]/.test(fallback) ? normalizeVideoProgressDisplayText(fallback) : fallback
+
   return (
-    getVideoTaskStatusLabel(status) ||
-    getVideoTaskStatusLabel(message) ||
-    (message && /[\u4e00-\u9fa5]/.test(message) ? message : undefined) ||
+    getVideoProgressStatusLabelFromText(status) ||
+    getVideoProgressStatusLabelFromText(message) ||
+    (message && /[\u4e00-\u9fa5]/.test(message) ? normalizeVideoProgressDisplayText(message) : undefined) ||
     (normalizedStatus ? VIDEO_TASK_PROGRESS_LABELS.UNKNOWN : undefined) ||
-    fallback
+    normalizedFallback
   )
 }
 
@@ -1438,13 +1454,13 @@ const VideoPage: FC = () => {
                   status={selectedVideo.status === 'completed' ? 'success' : 'active'}
                 />
                 <StatusText>
-                  {selectedVideo.progressText ||
-                    getVideoProgressText('PROCESSING', undefined, t('video.status.processing'))}
-                  <LoadingDots aria-hidden="true">
-                    <span />
-                    <span />
-                    <span />
-                  </LoadingDots>
+                  <AnimatedStatusText
+                    text={
+                      normalizeVideoProgressDisplayText(selectedVideo.progressText) ||
+                      getVideoProgressText('PROCESSING', undefined, t('video.status.processing')) ||
+                      t('video.status.processing')
+                    }
+                  />
                 </StatusText>
                 <Button onClick={onCancel}>{t('common.cancel')}</Button>
               </StatusPanel>
@@ -1719,39 +1735,54 @@ const StatusText = styled.div`
   word-break: break-word;
 `
 
-const LoadingDots = styled.span`
+type AnimatedStatusTextProps = {
+  text: string
+}
+
+const AnimatedStatusText: FC<AnimatedStatusTextProps> = ({ text }) => {
+  const characters = useMemo(() => Array.from(text), [text])
+
+  return (
+    <AnimatedStatusTextContainer aria-label={text} role="text">
+      {characters.map((character, index) => (
+        <AnimatedStatusChar key={`${character}-${index}`} $delay={index * 0.06} aria-hidden="true">
+          {character === ' ' ? '\u00a0' : character}
+        </AnimatedStatusChar>
+      ))}
+    </AnimatedStatusTextContainer>
+  )
+}
+
+const AnimatedStatusTextContainer = styled.span`
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 3px;
-  margin-left: 6px;
+  justify-content: center;
+  gap: 0;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+`
 
-  span {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: var(--color-primary);
-    animation: pentime-video-status-dot 1.2s ease-in-out infinite;
-  }
+const AnimatedStatusChar = styled.span<{ $delay: number }>`
+  display: inline-block;
+  font-weight: 700;
+  animation: pentime-video-status-char 1.4s ease-in-out infinite;
+  animation-delay: ${({ $delay }) => `${$delay}s`};
+  will-change: transform, opacity;
 
-  span:nth-child(2) {
-    animation-delay: 0.18s;
-  }
-
-  span:nth-child(3) {
-    animation-delay: 0.36s;
-  }
-
-  @keyframes pentime-video-status-dot {
+  @keyframes pentime-video-status-char {
     0%,
-    80%,
+    70%,
     100% {
-      opacity: 0.25;
-      transform: translateY(0);
+      opacity: 0.45;
+      transform: translateY(0) scale(1);
     }
 
-    40% {
+    35% {
       opacity: 1;
-      transform: translateY(-3px);
+      transform: translateY(-3px) scale(1.05);
     }
   }
 `

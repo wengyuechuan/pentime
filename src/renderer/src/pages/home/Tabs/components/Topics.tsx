@@ -13,8 +13,7 @@ import { useInPlaceEdit } from '@renderer/hooks/useInPlaceEdit'
 import { useNotesSettings } from '@renderer/hooks/useNotesSettings'
 import { modelGenerating } from '@renderer/hooks/useRuntime'
 import { useSettings } from '@renderer/hooks/useSettings'
-import { finishTopicRenaming, startTopicRenaming, TopicManager } from '@renderer/hooks/useTopic'
-import { fetchMessagesSummary } from '@renderer/services/ApiService'
+import { TopicManager } from '@renderer/hooks/useTopic'
 import { getDefaultTopic } from '@renderer/services/AssistantService'
 import { EVENT_NAMES, EventEmitter } from '@renderer/services/EventService'
 import type { RootState } from '@renderer/store'
@@ -50,7 +49,6 @@ import {
   PinIcon,
   PinOffIcon,
   Save,
-  Sparkles,
   Square,
   UploadIcon,
   XIcon
@@ -74,7 +72,7 @@ export const Topics: React.FC<Props> = ({ assistant: _assistant, activeTopic, se
   const { notesPath } = useNotesSettings()
   const { assistants } = useAssistants()
   const { assistant, addTopic, removeTopic, moveTopic, updateTopic, updateTopics } = useAssistant(_assistant.id)
-  const { showTopicTime, pinTopicsToTop, setTopicPosition, topicPosition } = useSettings()
+  const { showTopicTime, setTopicPosition, topicPosition } = useSettings()
 
   const renamingTopics = useSelector((state: RootState) => state.runtime.chat.renamingTopics)
   const topicLoadingQuery = useSelector((state: RootState) => state.messages.loadingByTopic)
@@ -170,40 +168,32 @@ export const Topics: React.FC<Props> = ({ assistant: _assistant, activeTopic, se
 
   const onPinTopic = useCallback(
     (topic: Topic) => {
-      // 只有当 pinTopicsToTop 开启时才重新排序话题
-      if (pinTopicsToTop) {
-        let newIndex = 0
+      let newIndex = 0
 
-        if (topic.pinned) {
-          // 取消固定：将话题移到未固定话题的顶部
-          const pinnedTopics = assistant.topics.filter((t) => t.pinned)
-          const unpinnedTopics = assistant.topics.filter((t) => !t.pinned)
+      if (topic.pinned) {
+        const pinnedTopics = assistant.topics.filter((t) => t.pinned)
+        const unpinnedTopics = assistant.topics.filter((t) => !t.pinned)
+        const reorderedTopics = [...pinnedTopics.filter((t) => t.id !== topic.id), topic, ...unpinnedTopics]
 
-          const reorderedTopics = [...pinnedTopics.filter((t) => t.id !== topic.id), topic, ...unpinnedTopics]
+        newIndex = pinnedTopics.length - 1
+        updateTopics(reorderedTopics)
+      } else {
+        const pinnedTopics = assistant.topics.filter((t) => t.pinned)
+        const unpinnedTopics = assistant.topics.filter((t) => !t.pinned)
+        const reorderedTopics = [topic, ...pinnedTopics, ...unpinnedTopics.filter((t) => t.id !== topic.id)]
 
-          newIndex = pinnedTopics.length - 1
-          updateTopics(reorderedTopics)
-        } else {
-          // 固定话题：移到固定区域顶部
-          const pinnedTopics = assistant.topics.filter((t) => t.pinned)
-          const unpinnedTopics = assistant.topics.filter((t) => !t.pinned)
-
-          const reorderedTopics = [topic, ...pinnedTopics, ...unpinnedTopics.filter((t) => t.id !== topic.id)]
-
-          newIndex = 0
-          updateTopics(reorderedTopics)
-        }
-
-        // 延迟滚动到话题位置（等待渲染完成）
-        setTimeout(() => {
-          listRef.current?.scrollToIndex(newIndex, { align: 'auto' })
-        }, 50)
+        newIndex = 0
+        updateTopics(reorderedTopics)
       }
+
+      setTimeout(() => {
+        listRef.current?.scrollToIndex(newIndex, { align: 'auto' })
+      }, 50)
 
       const updatedTopic = { ...topic, pinned: !topic.pinned }
       updateTopic(updatedTopic)
     },
-    [assistant.topics, updateTopic, updateTopics, pinTopicsToTop]
+    [assistant.topics, updateTopic, updateTopics]
   )
 
   const onDeleteTopic = useCallback(
@@ -245,29 +235,6 @@ export const Topics: React.FC<Props> = ({ assistant: _assistant, activeTopic, se
     if (!topic) return []
 
     const menus: MenuProps['items'] = [
-      {
-        label: t('chat.topics.auto_rename'),
-        key: 'auto-rename',
-        icon: <Sparkles size={14} />,
-        disabled: isRenaming(topic.id),
-        async onClick() {
-          const messages = await TopicManager.getTopicMessages(topic.id)
-          if (messages.length >= 2) {
-            startTopicRenaming(topic.id)
-            try {
-              const { text: summaryText, error } = await fetchMessagesSummary({ messages })
-              if (summaryText) {
-                const updatedTopic = { ...topic, name: summaryText, isNameManuallyEdited: false }
-                updateTopic(updatedTopic)
-              } else if (error) {
-                window.toast?.error(`${t('message.error.fetchTopicName')}: ${error}`)
-              }
-            } finally {
-              finishTopicRenaming(topic.id)
-            }
-          }
-        }
-      },
       {
         label: t('chat.topics.edit.title'),
         key: 'rename',
@@ -523,17 +490,14 @@ export const Topics: React.FC<Props> = ({ assistant: _assistant, activeTopic, se
     onDeleteTopic
   ])
 
-  // Sort topics based on pinned status if pinTopicsToTop is enabled
+  // Keep pinned topics at the top.
   const sortedTopics = useMemo(() => {
-    if (pinTopicsToTop) {
-      return [...assistant.topics].sort((a, b) => {
-        if (a.pinned && !b.pinned) return -1
-        if (!a.pinned && b.pinned) return 1
-        return 0
-      })
-    }
-    return assistant.topics
-  }, [assistant.topics, pinTopicsToTop])
+    return [...assistant.topics].sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1
+      if (!a.pinned && b.pinned) return 1
+      return 0
+    })
+  }, [assistant.topics])
 
   // Filter topics based on search text (only in manage mode)
   // Supports: case-insensitive, space-separated keywords (all must match)
