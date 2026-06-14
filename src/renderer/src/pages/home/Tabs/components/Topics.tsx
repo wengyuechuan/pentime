@@ -13,7 +13,8 @@ import { useInPlaceEdit } from '@renderer/hooks/useInPlaceEdit'
 import { useNotesSettings } from '@renderer/hooks/useNotesSettings'
 import { modelGenerating } from '@renderer/hooks/useRuntime'
 import { useSettings } from '@renderer/hooks/useSettings'
-import { TopicManager } from '@renderer/hooks/useTopic'
+import { finishTopicRenaming, startTopicRenaming, TopicManager } from '@renderer/hooks/useTopic'
+import { fetchMessagesSummary } from '@renderer/services/ApiService'
 import { getDefaultTopic } from '@renderer/services/AssistantService'
 import { EVENT_NAMES, EventEmitter } from '@renderer/services/EventService'
 import type { RootState } from '@renderer/store'
@@ -49,6 +50,7 @@ import {
   PinIcon,
   PinOffIcon,
   Save,
+  Sparkles,
   Square,
   UploadIcon,
   XIcon
@@ -236,6 +238,14 @@ export const Topics: React.FC<Props> = ({ assistant: _assistant, activeTopic, se
 
     const menus: MenuProps['items'] = [
       {
+        label: topic.pinned ? t('chat.topics.unpin') : t('chat.topics.pin'),
+        key: 'pin',
+        icon: topic.pinned ? <PinOffIcon size={14} /> : <PinIcon size={14} />,
+        onClick() {
+          onPinTopic(topic)
+        }
+      },
+      {
         label: t('chat.topics.edit.title'),
         key: 'rename',
         icon: <EditIcon size={14} />,
@@ -252,6 +262,29 @@ export const Topics: React.FC<Props> = ({ assistant: _assistant, activeTopic, se
           if (name && topic?.name !== name) {
             const updatedTopic = { ...topic, name, isNameManuallyEdited: true }
             updateTopic(updatedTopic)
+          }
+        }
+      },
+      {
+        label: t('chat.topics.auto_rename'),
+        key: 'auto-rename',
+        icon: <Sparkles size={14} />,
+        disabled: isRenaming(topic.id),
+        async onClick() {
+          const messages = await TopicManager.getTopicMessages(topic.id)
+          if (messages.length >= 2) {
+            startTopicRenaming(topic.id)
+            try {
+              const { text: summaryText, error } = await fetchMessagesSummary({ messages })
+              if (summaryText) {
+                const updatedTopic = { ...topic, name: summaryText, isNameManuallyEdited: false }
+                updateTopic(updatedTopic)
+              } else if (error) {
+                window.toast?.error(`${t('message.error.fetchTopicName')}: ${error}`)
+              }
+            } finally {
+              finishTopicRenaming(topic.id)
+            }
           }
         }
       },
@@ -281,14 +314,6 @@ export const Topics: React.FC<Props> = ({ assistant: _assistant, activeTopic, se
               updateTopic(updatedTopic)
               topic.id === activeTopic.id && setActiveTopic(updatedTopic)
             })()
-        }
-      },
-      {
-        label: topic.pinned ? t('chat.topics.unpin') : t('chat.topics.pin'),
-        key: 'pin',
-        icon: topic.pinned ? <PinOffIcon size={14} /> : <PinIcon size={14} />,
-        onClick() {
-          onPinTopic(topic)
         }
       },
       {
