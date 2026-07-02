@@ -134,7 +134,7 @@ rpm:
   fpm: ["--rpm-rpmbuild-define=_build_id_links none"]
 publish:
   provider: generic
-  url: https://pentime-new.com/pen-time/releases/v1.9.15
+  url: https://pentime-new.com/pen-time/releases/v1.10.0
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
 beforePack: scripts/before-pack.js
