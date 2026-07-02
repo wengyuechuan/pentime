@@ -4,6 +4,13 @@ import { Navbar, NavbarCenter } from '@renderer/components/app/Navbar'
 import { ActionIconButton } from '@renderer/components/Buttons'
 import Scrollbar from '@renderer/components/Scrollbar'
 import TranslateButton from '@renderer/components/TranslateButton'
+import {
+  getPentimeNewApiVideoFallbackModels,
+  isSeedVideoGenerationModel,
+  isSeedVisionVideoGenerationModel,
+  isVideoGenerationModel,
+  shouldUsePentimeNewApiVideoFallback
+} from '@renderer/config/models'
 import { getProviderLogo, PROVIDER_URLS } from '@renderer/config/providers'
 import { LanguagesEnum } from '@renderer/config/translate'
 import { useAllProviders } from '@renderer/hooks/useProvider'
@@ -11,7 +18,7 @@ import { useSettings } from '@renderer/hooks/useSettings'
 import ProviderSelect from '@renderer/pages/paintings/components/ProviderSelect'
 import { checkProviderEnabled } from '@renderer/pages/paintings/utils'
 import { translateText } from '@renderer/services/TranslateService'
-import type { FileMetadata, Model, Provider } from '@renderer/types'
+import type { FileMetadata, Provider } from '@renderer/types'
 import { getErrorMessage, getFileStorageName, uuid } from '@renderer/utils'
 import { isSendMessageKeyPressed } from '@renderer/utils/input'
 import { isNewApiProvider } from '@renderer/utils/provider'
@@ -32,11 +39,13 @@ import { SettingHelpLink, SettingTitle } from '../settings'
 const logger = loggerService.withContext('VideoPage')
 
 type FrameImage = {
+  id: string
   name: string
   dataUrl: string
 }
 
 type VideoStatus = 'pending' | 'processing' | 'completed' | 'failed'
+type SeedVideoMode = 'text' | 'first-frame' | 'first-last-frame' | 'reference-images' | 'multimodal-reference'
 
 const VIDEO_STATUS_LABEL_KEYS: Record<VideoStatus, string> = {
   completed: 'video.status.completed',
@@ -69,8 +78,14 @@ type VideoFormState = {
   prompt: string
   size: string
   enhancePrompt: boolean
+  generateAudio: boolean
+  seedDuration: number
+  seedMode: SeedVideoMode
   firstFrame?: FrameImage
   lastFrame?: FrameImage
+  referenceImages: FrameImage[]
+  referenceVideoUrls: string
+  referenceAudioUrls: string
 }
 
 type VideoTaskResult = {
@@ -92,10 +107,26 @@ type VideoPreviewResult = {
 type VideoEndpoints = {
   create: string
   status: string
-  content: string
+  content?: string
 }
 
 const VIDEO_SIZE_OPTIONS = ['1280x720', '720x1280', '1920x1080', '1080x1920']
+const SEED_VIDEO_DEFAULT_DURATION = 5
+const SEED_VIDEO_MULTIMODAL_DURATION = 11
+const SEED_VIDEO_DURATION_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 4)
+const MAX_SEED_REFERENCE_IMAGES = 9
+const SEED_VIDEO_SIZE_RATIO_MAP: Record<string, string> = {
+  '1280x720': '16:9',
+  '1920x1080': '16:9',
+  '720x1280': '9:16',
+  '1080x1920': '9:16'
+}
+const SEED_VIDEO_SIZE_RESOLUTION_MAP: Record<string, string> = {
+  '1280x720': '720p',
+  '720x1280': '720p',
+  '1920x1080': '1080p',
+  '1080x1920': '1080p'
+}
 const VIDEO_TASK_PROGRESS_LABELS: Record<string, string> = {
   NOT_START: '[Pentime] 未开始 请稍候',
   SUBMITTED: '[Pentime] 已提交 请稍候',
@@ -115,7 +146,13 @@ const DEFAULT_FORM: VideoFormState = {
   model: '',
   prompt: '',
   size: VIDEO_SIZE_OPTIONS[0],
-  enhancePrompt: true
+  enhancePrompt: true,
+  generateAudio: true,
+  seedDuration: SEED_VIDEO_DEFAULT_DURATION,
+  seedMode: 'text',
+  referenceImages: [],
+  referenceVideoUrls: '',
+  referenceAudioUrls: ''
 }
 
 type VideoPageState = {
@@ -279,14 +316,15 @@ const normalizeProviderApiHost = (provider: Provider) => {
   return host.replace(/\/v1$/, '')
 }
 
-const getVideoEndpoints = (provider: Provider): VideoEndpoints => {
+const getVideoEndpoints = (provider: Provider, model?: string): VideoEndpoints => {
   const base = normalizeProviderApiHost(provider)
   const prefix = provider.id === 'aionly' ? '/openai/v1' : '/v1'
+  const useSeedVideoEndpoint = model ? isSeedVideoGenerationModel(model) : false
 
   return {
-    create: `${base}${prefix}/videos`,
+    create: `${base}${prefix}${useSeedVideoEndpoint ? '/video/generations' : '/videos'}`,
     status: `${base}${prefix}/video/generations`,
-    content: `${base}${prefix}/videos`
+    content: useSeedVideoEndpoint ? undefined : `${base}${prefix}/videos`
   }
 }
 
@@ -457,12 +495,16 @@ const extractVideoUrl = (data: any): string | undefined => {
     dataItem?.downloadUrl,
     dataItem?.result_url,
     dataItem?.content,
+    dataItem?.content?.video_url,
+    dataItem?.content?.url,
     nestedDataItem?.url,
     nestedDataItem?.video_url,
     nestedDataItem?.videoUrl,
     nestedDataItem?.download_url,
     nestedDataItem?.downloadUrl,
     nestedDataItem?.result_url,
+    nestedDataItem?.content?.video_url,
+    nestedDataItem?.content?.url,
     nestedDataItem?.metadata?.url,
     nestedDataItem?.metadata?.video_url,
     nestedDataItem?.metadata?.download_url,
@@ -560,7 +602,7 @@ const readFrameImage = (file: File) => {
     const reader = new FileReader()
     reader.onload = () => {
       if (typeof reader.result === 'string') {
-        resolve({ name: file.name, dataUrl: reader.result })
+        resolve({ id: uuid(), name: file.name, dataUrl: reader.result })
         return
       }
       reject(new Error('Invalid image data'))
@@ -572,20 +614,79 @@ const readFrameImage = (file: File) => {
 
 const frameUploadList = (frame?: FrameImage): UploadFile[] => {
   if (!frame) return []
-  return [{ uid: frame.name, name: frame.name, status: 'done' }]
+  return [{ uid: frame.id, name: frame.name, status: 'done' }]
 }
 
-const isVideoModel = (model: Model) => {
-  const endpointTypes = model.supported_endpoint_types?.map((type) => String(type)) ?? []
-  const endpointType = String(model.endpoint_type ?? '')
-  const value = `${model.id} ${model.name} ${model.group} ${model.description ?? ''}`.toLowerCase()
+const frameUploadListFromImages = (frames: FrameImage[]): UploadFile[] => {
+  return frames.map((frame) => ({ uid: frame.id, name: frame.name, status: 'done' }))
+}
 
-  return (
-    endpointType === 'video-generation' ||
-    endpointTypes.includes('video-generation') ||
-    endpointTypes.includes('videos') ||
-    /\bveo\b|veo-|gemini.*video|video/.test(value)
-  )
+const parseReferenceUrls = (value: string) => {
+  return value
+    .split(/[\s,，]+/)
+    .map((url) => url.trim())
+    .filter(Boolean)
+}
+
+const isHttpUrl = (value: string) => /^https?:\/\//i.test(value)
+
+const getSeedVideoDuration = (duration: number, fallback = SEED_VIDEO_DEFAULT_DURATION) => {
+  return SEED_VIDEO_DURATION_OPTIONS.includes(duration) ? duration : fallback
+}
+
+const getSeedVideoModeDefaultDuration = (mode: SeedVideoMode) => {
+  return mode === 'multimodal-reference' ? SEED_VIDEO_MULTIMODAL_DURATION : SEED_VIDEO_DEFAULT_DURATION
+}
+
+const buildSeedVideoRequestBody = (state: VideoFormState) => {
+  const metadata: Record<string, unknown> = {
+    ratio: SEED_VIDEO_SIZE_RATIO_MAP[state.size] || SEED_VIDEO_SIZE_RATIO_MAP[VIDEO_SIZE_OPTIONS[0]],
+    duration: getSeedVideoDuration(state.seedDuration, getSeedVideoModeDefaultDuration(state.seedMode)),
+    watermark: false,
+    generate_audio: state.generateAudio
+  }
+
+  const body: Record<string, unknown> = {
+    model: state.model,
+    prompt: state.prompt,
+    metadata
+  }
+
+  if (state.seedMode === 'first-frame' && state.firstFrame) {
+    body.image = state.firstFrame.dataUrl
+  }
+
+  if (state.seedMode === 'first-last-frame') {
+    if (state.firstFrame) {
+      metadata.first_frame_image = state.firstFrame.dataUrl
+    }
+    if (state.lastFrame) {
+      metadata.last_frame_image = state.lastFrame.dataUrl
+    }
+  }
+
+  if (state.seedMode === 'reference-images' || state.seedMode === 'multimodal-reference') {
+    if (state.referenceImages.length > 0) {
+      metadata.reference_images = state.referenceImages.map((image) => image.dataUrl)
+    }
+  }
+
+  if (state.seedMode === 'multimodal-reference') {
+    const referenceVideos = parseReferenceUrls(state.referenceVideoUrls)
+    const referenceAudios = parseReferenceUrls(state.referenceAudioUrls)
+
+    if (referenceVideos.length > 0) {
+      metadata.reference_videos = referenceVideos
+    }
+    if (referenceAudios.length > 0) {
+      metadata.reference_audios = referenceAudios
+    }
+
+    metadata.resolution =
+      SEED_VIDEO_SIZE_RESOLUTION_MAP[state.size] || SEED_VIDEO_SIZE_RESOLUTION_MAP[VIDEO_SIZE_OPTIONS[0]]
+  }
+
+  return body
 }
 
 const createAbortError = () => new DOMException('Aborted', 'AbortError')
@@ -680,23 +781,52 @@ const VideoPage: FC = () => {
   const [isTranslating, setIsTranslating] = useState(false)
   const [spaceClickCount, setSpaceClickCount] = useState(0)
   const isPromptEmpty = !form.prompt.trim()
+  const isSeedModelSelected = isSeedVideoGenerationModel(form.model)
+  const isSeedVisionModelSelected = isSeedVisionVideoGenerationModel(form.model)
+  const seedModeOptions = useMemo(
+    () => [
+      { label: t('video.seed_mode_text'), value: 'text' },
+      { label: t('video.seed_mode_first_frame'), value: 'first-frame' },
+      { label: t('video.seed_mode_first_last_frame'), value: 'first-last-frame' },
+      { label: t('video.seed_mode_reference_images'), value: 'reference-images' },
+      { label: t('video.seed_mode_multimodal_reference'), value: 'multimodal-reference' }
+    ],
+    [t]
+  )
+  const visibleSeedModeOptions = useMemo(() => {
+    if (isSeedVisionModelSelected) {
+      return seedModeOptions.filter((option) => option.value === 'multimodal-reference')
+    }
+    return seedModeOptions
+  }, [isSeedVisionModelSelected, seedModeOptions])
+  const seedDurationOptions = useMemo(
+    () => SEED_VIDEO_DURATION_OPTIONS.map((value) => ({ label: `${value}${t('video.seconds')}`, value })),
+    [t]
+  )
 
   const modelOptions = useMemo(() => {
     if (!currentProvider) return []
     if (!currentProvider.enabled || !currentProvider.apiKey.trim()) return []
 
-    const providerModels = currentProvider.models.filter(isVideoModel).map((model) => ({
+    const models =
+      shouldUsePentimeNewApiVideoFallback(currentProvider) && currentProvider.models.length > 0
+        ? currentProvider.models.concat(getPentimeNewApiVideoFallbackModels(currentProvider.id))
+        : currentProvider.models
+
+    const providerModels = models.filter(isVideoGenerationModel).map((model) => ({
       label: model.name || model.id,
       value: model.id,
       group: model.group || currentProvider.name
     }))
 
     const seen = new Set<string>()
-    return providerModels.filter((item) => {
-      if (seen.has(item.value)) return false
-      seen.add(item.value)
-      return true
-    })
+    return providerModels
+      .filter((item) => {
+        if (seen.has(item.value)) return false
+        seen.add(item.value)
+        return true
+      })
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' }))
   }, [currentProvider])
 
   const groupedModelOptions = useMemo(() => {
@@ -746,6 +876,18 @@ const VideoPage: FC = () => {
   }, [form.model, modelOptions])
 
   useEffect(() => {
+    if (!isSeedVisionModelSelected || form.seedMode === 'multimodal-reference') {
+      return
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      seedDuration: getSeedVideoModeDefaultDuration('multimodal-reference'),
+      seedMode: 'multimodal-reference'
+    }))
+  }, [form.seedMode, isSeedVisionModelSelected])
+
+  useEffect(() => {
     const timer = spaceClickTimer.current
     return () => {
       if (timer) {
@@ -759,6 +901,10 @@ const VideoPage: FC = () => {
   }, [])
 
   const buildRequestBody = (state: VideoFormState) => {
+    if (isSeedVideoGenerationModel(state.model)) {
+      return buildSeedVideoRequestBody(state)
+    }
+
     const body: Record<string, unknown> = {
       model: state.model,
       prompt: state.prompt,
@@ -775,6 +921,52 @@ const VideoPage: FC = () => {
     }
 
     return body
+  }
+
+  const getVideoFormValidationError = (state: VideoFormState) => {
+    if (!isSeedVideoGenerationModel(state.model)) {
+      return undefined
+    }
+
+    const referenceVideos = parseReferenceUrls(state.referenceVideoUrls)
+    const referenceAudios = parseReferenceUrls(state.referenceAudioUrls)
+    const invalidUrl = referenceVideos.concat(referenceAudios).find((url) => !isHttpUrl(url))
+
+    if (invalidUrl) {
+      return t('video.error.invalid_reference_url')
+    }
+
+    if (isSeedVisionVideoGenerationModel(state.model) && referenceVideos.length === 0) {
+      return t('video.error.missing_reference_video')
+    }
+
+    if (state.seedMode === 'first-frame' && !state.firstFrame) {
+      return t('video.error.missing_first_frame')
+    }
+
+    if (state.seedMode === 'first-last-frame') {
+      if (!state.firstFrame) {
+        return t('video.error.missing_first_frame')
+      }
+      if (!state.lastFrame) {
+        return t('video.error.missing_last_frame')
+      }
+    }
+
+    if (state.seedMode === 'reference-images' && state.referenceImages.length === 0) {
+      return t('video.error.missing_reference_image')
+    }
+
+    if (
+      state.seedMode === 'multimodal-reference' &&
+      state.referenceImages.length === 0 &&
+      referenceVideos.length === 0 &&
+      referenceAudios.length === 0
+    ) {
+      return t('video.error.missing_reference_material')
+    }
+
+    return undefined
   }
 
   const prepareVideoPreview = useCallback(
@@ -885,6 +1077,10 @@ const VideoPage: FC = () => {
     headers: Record<string, string>,
     signal: AbortSignal
   ): Promise<VideoTaskResult> => {
+    if (!endpoints.content) {
+      throw new Error(t('video.error.no_video_url'))
+    }
+
     const contentEndpoints = [`${endpoints.content}/${taskId}/content`, `${endpoints.content}/${taskId}/download`]
     let lastError: unknown
 
@@ -990,7 +1186,7 @@ const VideoPage: FC = () => {
     body: Record<string, unknown>,
     signal: AbortSignal
   ) => {
-    const endpoints = getVideoEndpoints(provider)
+    const endpoints = getVideoEndpoints(provider, typeof body.model === 'string' ? body.model : undefined)
     const data = await fetchJson(endpoints.create, {
       method: 'POST',
       headers: {
@@ -1018,6 +1214,12 @@ const VideoPage: FC = () => {
 
     const prompt = textareaRef.current?.resizableTextArea?.textArea?.value || form.prompt
     if (!form.model || !prompt.trim()) return
+    const nextForm = { ...form, prompt }
+    const validationError = getVideoFormValidationError(nextForm)
+    if (validationError) {
+      window.toast.error(validationError)
+      return
+    }
 
     try {
       await checkProviderEnabled(currentProvider, t)
@@ -1057,7 +1259,7 @@ const VideoPage: FC = () => {
     }
 
     try {
-      const requestBody = buildRequestBody({ ...form, prompt })
+      const requestBody = buildRequestBody(nextForm)
 
       updateVideo(videoId, {
         status: 'processing',
@@ -1168,6 +1370,20 @@ const VideoPage: FC = () => {
     }
   }
 
+  const handleSeedModeChange = (seedMode: SeedVideoMode) => {
+    setForm((prev) => {
+      const shouldUseModeDefaultDuration =
+        prev.seedDuration === getSeedVideoModeDefaultDuration(prev.seedMode) ||
+        !SEED_VIDEO_DURATION_OPTIONS.includes(prev.seedDuration)
+
+      return {
+        ...prev,
+        seedMode,
+        seedDuration: shouldUseModeDefaultDuration ? getSeedVideoModeDefaultDuration(seedMode) : prev.seedDuration
+      }
+    })
+  }
+
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     const isEnterPressed = event.key === 'Enter' && !event.nativeEvent.isComposing
     if (
@@ -1209,8 +1425,26 @@ const VideoPage: FC = () => {
     return false
   }
 
+  const uploadReferenceImage = async (file: RcFile) => {
+    try {
+      const frame = await readFrameImage(file)
+      setForm((prev) => ({
+        ...prev,
+        referenceImages: [...prev.referenceImages, frame].slice(-MAX_SEED_REFERENCE_IMAGES)
+      }))
+    } catch (error) {
+      window.toast.error(getErrorMessage(error))
+    }
+    return false
+  }
+
   const removeFrame = (field: 'firstFrame' | 'lastFrame') => {
     setForm((prev) => ({ ...prev, [field]: undefined }))
+  }
+
+  const removeReferenceImage = (file: UploadFile) => {
+    setForm((prev) => ({ ...prev, referenceImages: prev.referenceImages.filter((image) => image.id !== file.uid) }))
+    return true
   }
 
   const handleProviderChange = (providerId: string) => {
@@ -1368,6 +1602,24 @@ const VideoPage: FC = () => {
                 />
               </Field>
 
+              {isSeedModelSelected && (
+                <>
+                  <SettingTitle style={{ marginTop: 15, marginBottom: 5 }}>{t('video.seed_mode')}</SettingTitle>
+                  <Field>
+                    <Select value={form.seedMode} onChange={handleSeedModeChange} options={visibleSeedModeOptions} />
+                  </Field>
+
+                  <SettingTitle style={{ marginTop: 15, marginBottom: 5 }}>{t('video.duration')}</SettingTitle>
+                  <Field>
+                    <Select
+                      value={form.seedDuration}
+                      onChange={(seedDuration) => setForm((prev) => ({ ...prev, seedDuration }))}
+                      options={seedDurationOptions}
+                    />
+                  </Field>
+                </>
+              )}
+
               <SwitchRow>
                 <span>{t('video.enhance_prompt')}</span>
                 <Switch
@@ -1376,31 +1628,120 @@ const VideoPage: FC = () => {
                 />
               </SwitchRow>
 
-              <SettingTitle style={{ marginTop: 20 }}>{t('video.first_frame')}</SettingTitle>
-              <Upload
-                accept="image/png,image/jpeg,image/webp"
-                maxCount={1}
-                fileList={frameUploadList(form.firstFrame)}
-                beforeUpload={uploadFrame('firstFrame')}
-                onRemove={() => {
-                  removeFrame('firstFrame')
-                  return true
-                }}>
-                <UploadButton icon={<UploadIcon size={14} />}>{t('video.upload_frame')}</UploadButton>
-              </Upload>
+              {isSeedModelSelected && (
+                <SwitchRow>
+                  <span>{t('video.generate_audio')}</span>
+                  <Switch
+                    checked={form.generateAudio}
+                    onChange={(generateAudio) => setForm((prev) => ({ ...prev, generateAudio }))}
+                  />
+                </SwitchRow>
+              )}
 
-              <SettingTitle style={{ marginTop: 15 }}>{t('video.last_frame')}</SettingTitle>
-              <Upload
-                accept="image/png,image/jpeg,image/webp"
-                maxCount={1}
-                fileList={frameUploadList(form.lastFrame)}
-                beforeUpload={uploadFrame('lastFrame')}
-                onRemove={() => {
-                  removeFrame('lastFrame')
-                  return true
-                }}>
-                <UploadButton icon={<UploadIcon size={14} />}>{t('video.upload_frame')}</UploadButton>
-              </Upload>
+              {isSeedModelSelected ? (
+                <>
+                  {(form.seedMode === 'first-frame' || form.seedMode === 'first-last-frame') && (
+                    <>
+                      <SettingTitle style={{ marginTop: 20 }}>{t('video.first_frame')}</SettingTitle>
+                      <Upload
+                        accept="image/png,image/jpeg,image/webp"
+                        maxCount={1}
+                        fileList={frameUploadList(form.firstFrame)}
+                        beforeUpload={uploadFrame('firstFrame')}
+                        onRemove={() => {
+                          removeFrame('firstFrame')
+                          return true
+                        }}>
+                        <UploadButton icon={<UploadIcon size={14} />}>{t('video.upload_frame')}</UploadButton>
+                      </Upload>
+                    </>
+                  )}
+
+                  {form.seedMode === 'first-last-frame' && (
+                    <>
+                      <SettingTitle style={{ marginTop: 15 }}>{t('video.last_frame')}</SettingTitle>
+                      <Upload
+                        accept="image/png,image/jpeg,image/webp"
+                        maxCount={1}
+                        fileList={frameUploadList(form.lastFrame)}
+                        beforeUpload={uploadFrame('lastFrame')}
+                        onRemove={() => {
+                          removeFrame('lastFrame')
+                          return true
+                        }}>
+                        <UploadButton icon={<UploadIcon size={14} />}>{t('video.upload_frame')}</UploadButton>
+                      </Upload>
+                    </>
+                  )}
+
+                  {(form.seedMode === 'reference-images' || form.seedMode === 'multimodal-reference') && (
+                    <>
+                      <SettingTitle style={{ marginTop: 20 }}>{t('video.reference_images')}</SettingTitle>
+                      <Upload
+                        accept="image/png,image/jpeg,image/webp"
+                        multiple
+                        maxCount={MAX_SEED_REFERENCE_IMAGES}
+                        fileList={frameUploadListFromImages(form.referenceImages)}
+                        beforeUpload={uploadReferenceImage}
+                        onRemove={removeReferenceImage}>
+                        <UploadButton icon={<UploadIcon size={14} />}>{t('video.upload_reference_image')}</UploadButton>
+                      </Upload>
+                    </>
+                  )}
+
+                  {form.seedMode === 'multimodal-reference' && (
+                    <>
+                      <SettingTitle style={{ marginTop: 15, marginBottom: 5 }}>
+                        {t('video.reference_video_urls')}
+                      </SettingTitle>
+                      <ReferenceTextArea
+                        rows={3}
+                        value={form.referenceVideoUrls}
+                        placeholder={t('video.reference_url_placeholder')}
+                        onChange={(event) => setForm((prev) => ({ ...prev, referenceVideoUrls: event.target.value }))}
+                      />
+
+                      <SettingTitle style={{ marginTop: 15, marginBottom: 5 }}>
+                        {t('video.reference_audio_urls')}
+                      </SettingTitle>
+                      <ReferenceTextArea
+                        rows={3}
+                        value={form.referenceAudioUrls}
+                        placeholder={t('video.reference_url_placeholder')}
+                        onChange={(event) => setForm((prev) => ({ ...prev, referenceAudioUrls: event.target.value }))}
+                      />
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <SettingTitle style={{ marginTop: 20 }}>{t('video.first_frame')}</SettingTitle>
+                  <Upload
+                    accept="image/png,image/jpeg,image/webp"
+                    maxCount={1}
+                    fileList={frameUploadList(form.firstFrame)}
+                    beforeUpload={uploadFrame('firstFrame')}
+                    onRemove={() => {
+                      removeFrame('firstFrame')
+                      return true
+                    }}>
+                    <UploadButton icon={<UploadIcon size={14} />}>{t('video.upload_frame')}</UploadButton>
+                  </Upload>
+
+                  <SettingTitle style={{ marginTop: 15 }}>{t('video.last_frame')}</SettingTitle>
+                  <Upload
+                    accept="image/png,image/jpeg,image/webp"
+                    maxCount={1}
+                    fileList={frameUploadList(form.lastFrame)}
+                    beforeUpload={uploadFrame('lastFrame')}
+                    onRemove={() => {
+                      removeFrame('lastFrame')
+                      return true
+                    }}>
+                    <UploadButton icon={<UploadIcon size={14} />}>{t('video.upload_frame')}</UploadButton>
+                  </Upload>
+                </>
+              )}
             </>
           )}
         </LeftContainer>
@@ -1645,6 +1986,11 @@ const SwitchRow = styled.div`
 
 const UploadButton = styled(Button)`
   width: 100%;
+`
+
+const ReferenceTextArea = styled(TextArea)`
+  margin-bottom: 4px;
+  resize: none !important;
 `
 
 const PreviewArea = styled.div`

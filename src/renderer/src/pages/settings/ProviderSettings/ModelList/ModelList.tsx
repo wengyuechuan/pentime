@@ -30,6 +30,8 @@ interface ModelListProps {
 
 type ModelGroups = Record<string, Model[]>
 const MODEL_COUNT_THRESHOLD = 10
+const sortModelsByName = (models: Model[]) =>
+  sortBy(models, [(model) => (model.name || model.id).toLowerCase(), (model) => model.id.toLowerCase()])
 
 /**
  * 根据搜索文本筛选模型、分组并排序
@@ -37,8 +39,8 @@ const MODEL_COUNT_THRESHOLD = 10
 const calculateModelGroups = (models: Model[], searchText: string): ModelGroups => {
   const filteredModels = searchText ? filterModelsByKeywords(searchText, models) : models
   const grouped = groupBy(filteredModels, 'group')
-  return sortBy(toPairs(grouped), [0]).reduce((acc, [key, value]) => {
-    acc[key] = value
+  return sortBy(toPairs(grouped), [([key]) => key.toLowerCase()]).reduce((acc, [key, value]) => {
+    acc[key] = sortModelsByName(value)
     return acc
   }, {})
 }

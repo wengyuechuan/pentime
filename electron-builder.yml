@@ -134,7 +134,7 @@ rpm:
   fpm: ["--rpm-rpmbuild-define=_build_id_links none"]
 publish:
   provider: generic
-  url: https://pentime-new.com/pen-time/releases/v1.9.9
+  url: https://pentime-new.com/pen-time/releases/v1.9.15
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
 beforePack: scripts/before-pack.js
@@ -144,24 +144,19 @@ artifactBuildCompleted: scripts/artifact-build-completed.js
 releaseInfo:
   releaseNotes: |
     <!--LANG:en-->
-    Pen-Time 1.9.9 - Stability and Model Updates
+    Pen-Time 1.10.0 - Image Model Improvements
 
-    ✨ New Features
-    - [Models] Added MiniMax M3 to the built-in model list.
-
-    🐛 Bug Fixes
-    - [Mini Apps] Fixed an app crash that could occur when launching mini apps.
-    - [OCR] Fixed a Windows startup crash that could occur while detecting Intel OV OCR availability.
-    - [Agent] Fixed agent sessions automatically renaming after topic auto-renaming is disabled.
+    Updates
+    - Added support for gpt-image-2-t with the same image options as gpt-image-2.
+    - Improved Seed series model icons with a white background.
+    - Localized standard and HD quality options.
 
     <!--LANG:zh-CN-->
-    Pen-Time 1.9.9 - 稳定性与模型更新
+    Pen-Time 1.10.0 - 绘图模型优化
 
-    ✨ 新功能
-    - [模型] 内置模型列表新增 MiniMax M3。
+    更新内容
+    - 新增 gpt-image-2-t 支持，并与 gpt-image-2 使用相同绘图选项。
+    - Seed 系列模型图标增加白色背景。
+    - 质量选项 standard / HD 已补充中文显示。
 
-    🐛 问题修复
-    - [小程序] 修复启动小程序时可能导致应用崩溃的问题。
-    - [OCR] 修复 Windows 启动时检测 Intel OV OCR 可用性可能导致崩溃的问题。
-    - [智能体] 修复关闭话题自动命名后，智能体会话仍会自动重命名的问题。
     <!--LANG:END-->

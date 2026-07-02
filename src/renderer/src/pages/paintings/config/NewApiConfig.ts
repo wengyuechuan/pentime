@@ -22,6 +22,7 @@ export const SUPPORTED_MODELS = [
   'gpt-image-1',
   'gpt-image-1.5',
   'gpt-image-2',
+  'gpt-image-2-t',
   'gpt-image-v2',
   'chatgpt-image-latest',
   'gemini-2.5-flash-image',
@@ -84,6 +85,16 @@ export const MODELS: NewApiModelConfig[] = [
     background: GPT_IMAGE_BACKGROUND
   },
   {
+    name: 'gpt-image-2-t',
+    group: 'OpenAI',
+    imageSizes: GPT_IMAGE_2_SIZES,
+    max_images: 1,
+    quality: GPT_IMAGE_2_QUALITY,
+    output_compression_format: [{ value: 'jpeg' }, { value: 'webp' }],
+    output_format: [{ value: 'image/png' }, { value: 'image/jpeg' }, { value: 'image/webp' }],
+    background: GPT_IMAGE_BACKGROUND
+  },
+  {
     name: 'chatgpt-image-latest',
     group: 'OpenAI',
     max_images: 1,
@@ -123,7 +134,7 @@ export function getNewApiModelConfig(model?: string) {
   const normalizedModel = model.toLowerCase()
 
   return (
-    MODELS.find((m) => m.name === model) ||
+    MODELS.find((m) => m.name.toLowerCase() === normalizedModel) ||
     (isNewApiImageSizeModel(model) ? MODELS.find((m) => m.name === 'gpt-image-2') : undefined) ||
     (normalizedModel.includes('chatgpt-image') ? MODELS.find((m) => m.name === 'chatgpt-image-latest') : undefined) ||
     (normalizedModel.includes('gemini') && normalizedModel.includes('image')
@@ -161,7 +172,7 @@ export function isNewApiImageSizeModel(model?: string) {
   }
 
   const normalizedModel = model.toLowerCase()
-  return normalizedModel === 'gpt-image-2'
+  return /^gpt-image-2(?:$|-)/.test(normalizedModel)
 }
 
 export const DEFAULT_PAINTING: GeneratePainting = {

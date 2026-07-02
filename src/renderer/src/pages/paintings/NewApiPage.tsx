@@ -267,6 +267,7 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
 
   const selectedModelConfig = useMemo(() => getNewApiModelConfig(painting.model), [painting.model])
   const isImageSizeSupported = isNewApiImageSizeModel(painting.model)
+  const showNumberOfImages = (selectedModelConfig?.max_images ?? 0) > 1
   const selectedImageSizeValues = useMemo(
     () => (isImageSizeSupported ? (selectedModelConfig?.imageSizes?.map((item) => item.value) ?? []) : []),
     [isImageSizeSupported, selectedModelConfig]
@@ -995,7 +996,7 @@ const NewApiPage: FC<{ Options: string[] }> = ({ Options }) => {
                 )}
 
               {/* Number of Images (n) */}
-              {selectedModelConfig?.max_images && (
+              {showNumberOfImages && selectedModelConfig?.max_images && (
                 <>
                   <SettingTitle>{t('paintings.number_images')}</SettingTitle>
                   <InputNumber

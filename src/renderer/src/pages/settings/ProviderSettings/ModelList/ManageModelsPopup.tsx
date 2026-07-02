@@ -3,6 +3,7 @@ import { LoadingIcon } from '@renderer/components/Icons'
 import { HStack } from '@renderer/components/Layout'
 import { TopView } from '@renderer/components/TopView'
 import {
+  getPentimeNewApiVideoFallbackModels,
   groupQwenModels,
   isEmbeddingModel,
   isFunctionCallingModel,
@@ -10,6 +11,7 @@ import {
   isRerankModel,
   isVisionModel,
   isWebSearchModel,
+  shouldUsePentimeNewApiVideoFallback,
   SYSTEM_MODELS
 } from '@renderer/config/models'
 import { useProvider } from '@renderer/hooks/useProvider'
@@ -22,7 +24,7 @@ import { getDuplicateModelNames, isFreeModel } from '@renderer/utils/model'
 import { isNewApiProvider } from '@renderer/utils/provider'
 import { Button, Empty, Flex, Modal, Spin, Tabs, Tooltip } from 'antd'
 import Input from 'antd/es/input/Input'
-import { groupBy, isEmpty, uniqBy } from 'lodash'
+import { groupBy, isEmpty, sortBy, uniqBy } from 'lodash'
 import { debounce } from 'lodash'
 import { ListMinus, ListPlus, RefreshCcw, Search } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from 'react'
@@ -33,6 +35,9 @@ import ManageModelsList from './ManageModelsList'
 import { isModelInProvider, isValidNewApiModel } from './utils'
 
 const logger = loggerService.withContext('ManageModelsPopup')
+
+const sortModelsByName = (models: Model[]) =>
+  sortBy(models, [(model) => (model.name || model.id).toLowerCase(), (model) => model.id.toLowerCase()])
 
 interface ShowParams {
   providerId: string
@@ -74,7 +79,7 @@ const PopupContainer: React.FC<Props> = ({ providerId, resolve }) => {
   const searchInputRef = useRef<any>(null)
 
   const allModels = useMemo(
-    () => uniqBy([...(SYSTEM_MODELS[provider.id] || []), ...listModels, ...models], 'id'),
+    () => sortModelsByName(uniqBy([...(SYSTEM_MODELS[provider.id] || []), ...listModels, ...models], 'id')),
     [provider.id, listModels, models]
   )
   const duplicateModelNames = useMemo(() => getDuplicateModelNames(allModels), [allModels])
@@ -180,7 +185,12 @@ const PopupContainer: React.FC<Props> = ({ providerId, resolve }) => {
     setLoadingModels(true)
     try {
       const models = await fetchModels(provider)
-      const filteredModels = models.filter((model) => !isEmpty(model.name))
+      const fallbackModels = shouldUsePentimeNewApiVideoFallback(provider)
+        ? getPentimeNewApiVideoFallbackModels(provider.id)
+        : []
+      const filteredModels = sortModelsByName(
+        uniqBy([...models, ...provider.models, ...fallbackModels], 'id').filter((model) => !isEmpty(model.name))
+      )
       setListModels(filteredModels)
     } catch (error) {
       logger.error(`Failed to load models for provider ${getFancyProviderName(provider)}`, error as Error)

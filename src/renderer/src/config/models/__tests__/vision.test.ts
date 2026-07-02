@@ -122,6 +122,7 @@ describe('vision helpers', () => {
 
     it('detects models with restricted image size support and enhancement', () => {
       expect(isImageEnhancementModel(createModel({ id: 'qwen-image-edit' }))).toBe(true)
+      expect(isImageEnhancementModel(createModel({ id: 'gpt-image-2-t' }))).toBe(true)
       expect(isImageEnhancementModel(createModel({ id: 'gpt-4o' }))).toBe(false)
     })
 

@@ -264,7 +264,9 @@ const paintingsQualityOptionsKeyMap = {
   auto: 'paintings.quality_options.auto',
   high: 'paintings.quality_options.high',
   low: 'paintings.quality_options.low',
-  medium: 'paintings.quality_options.medium'
+  medium: 'paintings.quality_options.medium',
+  standard: 'paintings.quality_options.standard',
+  hd: 'paintings.quality_options.hd'
 } as const
 
 export const getPaintingsQualityOptionsLabel = (key: string): string => {

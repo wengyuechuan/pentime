@@ -319,6 +319,8 @@
       "tooltip": "Windowsでエージェントを実行するにはGit Bashが必要です。まだインストールされていない場合は、git-scm.comからインストールしてください。"
     },
     "input": {
+      "model_required": "[to be translated]:Please select a model for the current agent first",
+      "model_required_placeholder": "[to be translated]:Select a model above before starting the conversation",
       "placeholder": "メッセージをここに入力し、{{key}}で送信 - @でパスを選択、/でコマンドを選択",
       "soul_placeholder": "Telegramに接続するのを手伝ってください"
     },
@@ -3243,7 +3245,9 @@
       "auto": "自動",
       "high": "高",
       "low": "低",
-      "medium": "中"
+      "medium": "中",
+      "standard": "標準",
+      "hd": "HD"
     },
     "regenerate": {
       "confirm": "これにより、既存の生成画像が置き換えられます。続行しますか？"
@@ -6052,6 +6056,7 @@
   "video": {
     "add_video_model": "[to be translated]:Add video model",
     "aspect_ratio": "[to be translated]:Aspect Ratio",
+    "default_settings": "[to be translated]:Default settings",
     "duration": "[to be translated]:Duration",
     "empty_description": "[to be translated]:Generated videos will play here after you enter a prompt.",
     "empty_title": "[to be translated]:Waiting for video",
@@ -6060,6 +6065,12 @@
       "cancelled": "[to be translated]:Generation cancelled",
       "create_failed": "[to be translated]:Failed to create video task",
       "fetch_content_failed": "[to be translated]:Failed to fetch video content",
+      "invalid_reference_url": "[to be translated]:Reference video or audio URLs must start with http:// or https://",
+      "missing_first_frame": "[to be translated]:Upload the first frame image first",
+      "missing_last_frame": "[to be translated]:Upload the last frame image first",
+      "missing_reference_image": "[to be translated]:Upload at least one reference image",
+      "missing_reference_material": "[to be translated]:Upload a reference image, or enter a reference video/audio URL",
+      "missing_reference_video": "[to be translated]:The selected seed vision model requires at least one reference video URL",
       "no_task_id": "[to be translated]:The API did not return a task ID",
       "no_video_url": "[to be translated]:The API did not return a playable video URL",
       "task_failed": "[to be translated]:Video task failed",
@@ -6074,9 +6085,21 @@
     "new_task": "[to be translated]:New",
     "no_history": "[to be translated]:No videos yet",
     "no_provider": "[to be translated]:No available NewAPI provider",
+    "no_video_model": "[to be translated]:No available video generation model. Enable the Pen time provider, add an API key, and add a model with endpoint type Video Generation.",
     "prompt_placeholder": "[to be translated]:Describe the scene, camera movement, and style...",
+    "reference_audio_urls": "[to be translated]:Reference Audio URLs",
+    "reference_image": "[to be translated]:Reference Image",
+    "reference_images": "[to be translated]:Reference Images",
+    "reference_url_placeholder": "[to be translated]:One http(s) URL per line, or separate with commas",
+    "reference_video_urls": "[to be translated]:Reference Video URLs",
     "resolution": "[to be translated]:Resolution",
     "seconds": "[to be translated]:sec",
+    "seed_mode": "[to be translated]:Generation Mode",
+    "seed_mode_first_frame": "[to be translated]:First-frame Image to Video",
+    "seed_mode_first_last_frame": "[to be translated]:First/Last-frame Image to Video",
+    "seed_mode_multimodal_reference": "[to be translated]:Multimodal Reference Video",
+    "seed_mode_reference_images": "[to be translated]:Reference Image to Video",
+    "seed_mode_text": "[to be translated]:Text to Video",
     "status": {
       "completed": "[to be translated]:Completed",
       "failed": "[to be translated]:Failed",
@@ -6085,7 +6108,8 @@
       "submitting": "[to be translated]:Submitting"
     },
     "title": "[to be translated]:Video",
-    "upload_frame": "[to be translated]:Upload image"
+    "upload_frame": "[to be translated]:Upload image",
+    "upload_reference_image": "[to be translated]:Upload reference image"
   },
   "warning": {
     "missing_provider": "サプライヤーが存在しないため、デフォルトのサプライヤー {{provider}} にロールバックされました。これにより問題が発生する可能性があります。"

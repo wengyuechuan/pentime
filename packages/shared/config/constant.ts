@@ -198,8 +198,8 @@ export const GB = 1024 * MB
 export const defaultLanguage = 'en-US'
 
 export enum FeedUrl {
-  PRODUCTION = 'https://pentime-new.com/pen-time/releases/v1.9.9',
-  GITHUB_LATEST = 'https://pentime-new.com/pen-time/releases/v1.9.9'
+  PRODUCTION = 'https://pentime-new.com/pen-time/releases/v1.9.15',
+  GITHUB_LATEST = 'https://pentime-new.com/pen-time/releases/v1.9.15'
 }
 
 export enum UpdateConfigUrl {

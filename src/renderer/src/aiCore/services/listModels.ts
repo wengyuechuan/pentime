@@ -11,6 +11,7 @@ import {
 } from '@ai-sdk/provider-utils'
 import { loggerService } from '@logger'
 import { COPILOT_DEFAULT_HEADERS } from '@renderer/aiCore/provider/constants'
+import { getPentimeNewApiVideoFallbackModels, shouldUsePentimeModelCatalog } from '@renderer/config/models/video'
 import store from '@renderer/store'
 import type { EndpointType, Model, Provider } from '@renderer/types'
 import { SystemProviderIds } from '@renderer/types'
@@ -31,6 +32,7 @@ import {
   GeminiModelsResponseSchema,
   GitHubModelsResponseSchema,
   NewApiModelsResponseSchema,
+  NewApiPricingResponseSchema,
   OllamaTagsResponseSchema,
   OpenAIModelsResponseSchema,
   OVMSConfigResponseSchema,
@@ -143,6 +145,10 @@ function dedup<T>(items: T[], getId: (item: T) => string | undefined): T[] {
     seen.add(id)
     return true
   })
+}
+
+function compareModelNames(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
 }
 
 function pickPreferredString(values: Array<unknown>): string | undefined {
@@ -368,21 +374,61 @@ const togetherFetcher: ModelFetcher = {
 }
 
 const newApiFetcher: ModelFetcher = {
-  match: (p) => p.id === SystemProviderIds['new-api'] || p.type === 'new-api' || p.id === SystemProviderIds.cherryin,
+  match: (p) =>
+    p.id === SystemProviderIds['new-api'] ||
+    p.type === 'new-api' ||
+    p.id === SystemProviderIds.cherryin ||
+    shouldUsePentimeModelCatalog(p),
   fetch: async (provider, signal) => {
     const baseUrl = formatApiHost(provider.apiHost)
-    const response = await getFromApi({
-      url: `${baseUrl}/models`,
-      headers: defaultHeaders(provider),
-      responseSchema: NewApiModelsResponseSchema,
-      abortSignal: signal
-    })
-    return dedup(response.data, (m) => m.id).map((m) =>
-      toModel(m.id, provider, {
-        owned_by: m.owned_by,
-        supported_endpoint_types: m.supported_endpoint_types as EndpointType[] | undefined
+    try {
+      const response = await getFromApi({
+        url: `${baseUrl}/models`,
+        headers: defaultHeaders(provider),
+        responseSchema: NewApiModelsResponseSchema,
+        abortSignal: signal
       })
-    )
+      return dedup(response.data, (m) => m.id).map((m) =>
+        toModel(m.id, provider, {
+          owned_by: m.owned_by,
+          supported_endpoint_types: m.supported_endpoint_types as EndpointType[] | undefined
+        })
+      )
+    } catch (error) {
+      if (shouldUsePentimeModelCatalog(provider)) {
+        logger.warn('New API /v1/models failed, trying Pen-Time /api/pricing model catalog', {
+          providerId: provider.id,
+          error: error instanceof Error ? error.message : String(error)
+        })
+
+        try {
+          const pricingBaseUrl = withoutTrailingSlash(provider.apiHost).replace(/\/v1$/, '')
+          const pricingResponse = await getFromApi({
+            url: `${pricingBaseUrl}/api/pricing`,
+            headers: defaultHeaders(provider),
+            responseSchema: NewApiPricingResponseSchema,
+            abortSignal: signal
+          })
+
+          return dedup(pricingResponse.data, (m) => m.model_name)
+            .sort((a, b) => compareModelNames(a.model_name, b.model_name))
+            .map((m) =>
+              toModel(m.model_name, provider, {
+                owned_by: m.owner_by,
+                description: [m.tags, m.description].filter(Boolean).join(' '),
+                supported_endpoint_types: m.supported_endpoint_types as EndpointType[] | undefined
+              })
+            )
+        } catch (pricingError) {
+          logger.warn('Pen-Time /api/pricing model catalog failed, falling back to built-in video models', {
+            providerId: provider.id,
+            error: pricingError instanceof Error ? pricingError.message : String(pricingError)
+          })
+          return getPentimeNewApiVideoFallbackModels(provider.id)
+        }
+      }
+      throw error
+    }
   }
 }
 

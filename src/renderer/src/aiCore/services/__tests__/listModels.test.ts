@@ -277,6 +277,33 @@ const REAL_AIHUBMIX = {
   success: true
 }
 
+const REAL_PENTIME_PRICING = {
+  data: [
+    {
+      model_name: 'gpt-5.4',
+      description: 'GPT model',
+      tags: 'chat,tools',
+      owner_by: 'openai',
+      supported_endpoint_types: ['openai']
+    },
+    {
+      model_name: 'claude-sonnet-4-5-20250929',
+      description: 'Claude model',
+      tags: 'chat,vision',
+      owner_by: 'anthropic',
+      supported_endpoint_types: ['openai']
+    },
+    {
+      model_name: 'seed-2-mini',
+      description: 'Video model',
+      tags: 'video',
+      owner_by: 'bytedance',
+      supported_endpoint_types: ['openai']
+    }
+  ],
+  success: true
+}
+
 // === Helpers ===
 
 function makeProvider(overrides: Partial<Provider> & { id: string }): Provider {
@@ -446,6 +473,60 @@ describe('listModels', () => {
       expect(models[0].owned_by).toBe('Alibaba Cloud')
       expect(models[1].owned_by).toBe('Groq')
       expect(models).toMatchSnapshot()
+    })
+  })
+
+  describe('Pen-Time New API catalog', () => {
+    it('should fall back to /api/pricing when /v1/models is forbidden', async () => {
+      mockGetFromApi.mockRejectedValueOnce(new Error('403 Forbidden')).mockResolvedValueOnce({
+        value: REAL_PENTIME_PRICING
+      })
+
+      const models = await listModels(
+        makeProvider({
+          id: 'new-api',
+          type: 'new-api',
+          apiHost: 'https://api.siivsd.com/v1'
+        })
+      )
+
+      expect(mockGetFromApi).toHaveBeenCalledTimes(2)
+      expect(mockGetFromApi.mock.calls[0][0]).toMatchObject({
+        url: 'https://api.siivsd.com/v1/models'
+      })
+      expect(mockGetFromApi.mock.calls[1][0]).toMatchObject({
+        url: 'https://api.siivsd.com/api/pricing'
+      })
+      expect(models.map((model) => model.id)).toEqual(['claude-sonnet-4-5-20250929', 'gpt-5.4', 'seed-2-mini'])
+      expect(models.find((model) => model.id === 'gpt-5.4')).toMatchObject({
+        provider: 'new-api',
+        owned_by: 'openai',
+        supported_endpoint_types: ['openai']
+      })
+    })
+
+    it('should use the Pen-Time catalog for OpenAI-compatible provider configs on Pen-Time hosts', async () => {
+      mockGetFromApi.mockRejectedValueOnce(new Error('403 Forbidden')).mockResolvedValueOnce({
+        value: REAL_PENTIME_PRICING
+      })
+
+      const models = await listModels(
+        makeProvider({
+          id: 'custom-pentime',
+          type: 'openai',
+          apiHost: 'https://www.pentime-api.com'
+        })
+      )
+
+      expect(mockGetFromApi).toHaveBeenCalledTimes(2)
+      expect(mockGetFromApi.mock.calls[0][0]).toMatchObject({
+        url: 'https://www.pentime-api.com/models'
+      })
+      expect(mockGetFromApi.mock.calls[1][0]).toMatchObject({
+        url: 'https://www.pentime-api.com/api/pricing'
+      })
+      expect(models.map((model) => model.id)).toEqual(['claude-sonnet-4-5-20250929', 'gpt-5.4', 'seed-2-mini'])
+      expect(models.every((model) => model.provider === 'custom-pentime')).toBe(true)
     })
   })
 

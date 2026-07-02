@@ -3245,7 +3245,9 @@
       "auto": "自動",
       "high": "高",
       "low": "低",
-      "medium": "中"
+      "medium": "中",
+      "standard": "標準",
+      "hd": "高清"
     },
     "regenerate": {
       "confirm": "這將覆蓋已產生的圖片，是否繼續？"
@@ -6063,6 +6065,12 @@
       "cancelled": "已取消產生",
       "create_failed": "建立影片任務失敗",
       "fetch_content_failed": "取得影片內容失敗",
+      "invalid_reference_url": "[to be translated]:Reference video or audio URLs must start with http:// or https://",
+      "missing_first_frame": "[to be translated]:Upload the first frame image first",
+      "missing_last_frame": "[to be translated]:Upload the last frame image first",
+      "missing_reference_image": "[to be translated]:Upload at least one reference image",
+      "missing_reference_material": "[to be translated]:Upload a reference image, or enter a reference video/audio URL",
+      "missing_reference_video": "[to be translated]:The selected seed vision model requires at least one reference video URL",
       "no_task_id": "介面沒有返回任務 ID",
       "no_video_url": "介面沒有返回可播放的影片位址",
       "task_failed": "影片任務失敗",
@@ -6079,8 +6087,19 @@
     "no_provider": "暫無可用 Pen time 服務商",
     "no_video_model": "暫無可用的影片生成模型，請先啟用 Pen time 服務商、填寫 API Key，並新增端點類型為影片生成的模型",
     "prompt_placeholder": "描述你想產生的影片畫面、鏡頭運動和風格...",
+    "reference_audio_urls": "[to be translated]:Reference Audio URLs",
+    "reference_image": "[to be translated]:Reference Image",
+    "reference_images": "[to be translated]:Reference Images",
+    "reference_url_placeholder": "[to be translated]:One http(s) URL per line, or separate with commas",
+    "reference_video_urls": "[to be translated]:Reference Video URLs",
     "resolution": "解析度",
     "seconds": "秒",
+    "seed_mode": "[to be translated]:Generation Mode",
+    "seed_mode_first_frame": "[to be translated]:First-frame Image to Video",
+    "seed_mode_first_last_frame": "[to be translated]:First/Last-frame Image to Video",
+    "seed_mode_multimodal_reference": "[to be translated]:Multimodal Reference Video",
+    "seed_mode_reference_images": "[to be translated]:Reference Image to Video",
+    "seed_mode_text": "[to be translated]:Text to Video",
     "status": {
       "completed": "已完成",
       "failed": "失敗",
@@ -6089,7 +6108,8 @@
       "submitting": "正在提交"
     },
     "title": "影片",
-    "upload_frame": "上傳圖片"
+    "upload_frame": "上傳圖片",
+    "upload_reference_image": "[to be translated]:Upload reference image"
   },
   "warning": {
     "missing_provider": "供應商不存在，已改用預設供應商 {{provider}}。這可能導致問題。"

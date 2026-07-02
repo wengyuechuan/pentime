@@ -3245,7 +3245,9 @@
       "auto": "Auto",
       "high": "High",
       "low": "Low",
-      "medium": "Medium"
+      "medium": "Medium",
+      "standard": "Standard",
+      "hd": "HD"
     },
     "regenerate": {
       "confirm": "This will replace your existing generated images. Do you want to continue?"
@@ -6063,6 +6065,12 @@
       "cancelled": "Generation cancelled",
       "create_failed": "Failed to create video task",
       "fetch_content_failed": "Failed to fetch video content",
+      "invalid_reference_url": "Reference video or audio URLs must start with http:// or https://",
+      "missing_first_frame": "Upload the first frame image first",
+      "missing_last_frame": "Upload the last frame image first",
+      "missing_reference_image": "Upload at least one reference image",
+      "missing_reference_material": "Upload a reference image, or enter a reference video/audio URL",
+      "missing_reference_video": "The selected seed vision model requires at least one reference video URL",
       "no_task_id": "The API did not return a task ID",
       "no_video_url": "The API did not return a playable video URL",
       "task_failed": "Video task failed",
@@ -6079,8 +6087,19 @@
     "no_provider": "No available Pen time provider",
     "no_video_model": "No available video generation model. Enable the Pen time provider, add an API key, and add a model with endpoint type Video Generation.",
     "prompt_placeholder": "Describe the scene, camera movement, and style...",
+    "reference_audio_urls": "Reference Audio URLs",
+    "reference_image": "Reference Image",
+    "reference_images": "Reference Images",
+    "reference_url_placeholder": "One http(s) URL per line, or separate with commas",
+    "reference_video_urls": "Reference Video URLs",
     "resolution": "Resolution",
     "seconds": "sec",
+    "seed_mode": "Generation Mode",
+    "seed_mode_first_frame": "First-frame Image to Video",
+    "seed_mode_first_last_frame": "First/Last-frame Image to Video",
+    "seed_mode_multimodal_reference": "Multimodal Reference Video",
+    "seed_mode_reference_images": "Reference Image to Video",
+    "seed_mode_text": "Text to Video",
     "status": {
       "completed": "Completed",
       "failed": "Failed",
@@ -6089,7 +6108,8 @@
       "submitting": "Submitting"
     },
     "title": "Video",
-    "upload_frame": "Upload image"
+    "upload_frame": "Upload image",
+    "upload_reference_image": "Upload reference image"
   },
   "warning": {
     "missing_provider": "The supplier does not exist; reverted to the default supplier {{provider}}. This may cause issues."

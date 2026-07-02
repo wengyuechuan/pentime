@@ -52,10 +52,235 @@ const platformToArch = {
   linuxmusl: 'linuxmusl'
 }
 
+const expressRuntimeDependencies = [
+  '@tokenizer/token',
+  'bytes',
+  'core-util-is',
+  'dunder-proto',
+  'ee-first',
+  'es-object-atoms',
+  'forwarded',
+  'ipaddr.js',
+  'is-promise',
+  'math-intrinsics',
+  'media-typer',
+  'negotiator',
+  'object-inspect',
+  'path-to-regexp',
+  'process-nextick-args',
+  'setprototypeof',
+  'side-channel-list',
+  'side-channel-map',
+  'side-channel-weakmap',
+  'toidentifier',
+  'unpipe',
+  'util-deprecate',
+  'wrappy'
+]
+
+function copyNestedRuntimeDependency(rootDir, consumerPackageName, dependencyPackageName) {
+  const virtualStoreDir = path.join(rootDir, 'node_modules', '.pnpm')
+  if (!fs.existsSync(virtualStoreDir)) {
+    return
+  }
+
+  for (const entry of fs.readdirSync(virtualStoreDir)) {
+    if (!entry.startsWith(`${consumerPackageName}@`)) {
+      continue
+    }
+
+    const consumerStoreDir = path.join(virtualStoreDir, entry, 'node_modules')
+    const dependencyLink = path.join(consumerStoreDir, dependencyPackageName)
+    const consumerPackageDir = path.join(consumerStoreDir, consumerPackageName)
+    if (!fs.existsSync(dependencyLink) || !fs.existsSync(consumerPackageDir)) {
+      continue
+    }
+
+    const dependencySource = fs.realpathSync(dependencyLink)
+    const nestedDependencyTarget = path.join(consumerPackageDir, 'node_modules', dependencyPackageName)
+    fs.rmSync(nestedDependencyTarget, { recursive: true, force: true })
+    fs.mkdirSync(path.dirname(nestedDependencyTarget), { recursive: true })
+    fs.cpSync(dependencySource, nestedDependencyTarget, { recursive: true })
+    if (dependencyPackageName === 'iconv-lite') {
+      nestRuntimeDependencyIntoPackage(rootDir, nestedDependencyTarget, 'safer-buffer')
+    }
+    console.log(`[before-pack] Nested ${dependencyPackageName} into ${consumerPackageName}`)
+  }
+}
+
+function findPnpmPackageDir(rootDir, dependencyPackageName) {
+  const virtualStoreDir = path.join(rootDir, 'node_modules', '.pnpm')
+  if (!fs.existsSync(virtualStoreDir)) {
+    return null
+  }
+
+  for (const entry of fs.readdirSync(virtualStoreDir)) {
+    if (!entry.startsWith(`${dependencyPackageName}@`)) {
+      continue
+    }
+
+    const packageDir = path.join(virtualStoreDir, entry, 'node_modules', dependencyPackageName)
+    if (fs.existsSync(packageDir)) {
+      return packageDir
+    }
+  }
+
+  return null
+}
+
+function resolveRuntimeDependencySource(rootDir, dependencyPackageName, packageDir, excludedPath) {
+  const candidates = [
+    path.join(packageDir, 'node_modules', dependencyPackageName),
+    path.join(rootDir, 'node_modules', dependencyPackageName),
+    findPnpmPackageDir(rootDir, dependencyPackageName)
+  ].filter(Boolean)
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      if (excludedPath && path.resolve(candidate) === path.resolve(excludedPath)) {
+        continue
+      }
+      return fs.realpathSync(candidate)
+    }
+  }
+
+  return null
+}
+
+function nestRuntimeDependencyIntoPackage(rootDir, packageDir, dependencyPackageName) {
+  if (!fs.existsSync(packageDir)) {
+    return
+  }
+
+  const nestedDependencyTarget = path.join(packageDir, 'node_modules', dependencyPackageName)
+  const dependencySource = resolveRuntimeDependencySource(
+    rootDir,
+    dependencyPackageName,
+    packageDir,
+    nestedDependencyTarget
+  )
+  if (!dependencySource) {
+    return
+  }
+
+  fs.rmSync(nestedDependencyTarget, { recursive: true, force: true })
+  fs.mkdirSync(path.dirname(nestedDependencyTarget), { recursive: true })
+  fs.cpSync(dependencySource, nestedDependencyTarget, { recursive: true })
+  console.log(`[before-pack] Nested ${dependencyPackageName} into ${path.relative(rootDir, packageDir)}`)
+}
+
+function materializeTopLevelRuntimeDependency(rootDir, dependencyPackageName) {
+  const topLevelDependencyDir = path.join(rootDir, 'node_modules', dependencyPackageName)
+  if (!fs.existsSync(topLevelDependencyDir)) {
+    return
+  }
+
+  const dependencySource = fs.realpathSync(topLevelDependencyDir)
+  if (path.resolve(dependencySource) === path.resolve(topLevelDependencyDir)) {
+    return
+  }
+
+  const tempDir = `${topLevelDependencyDir}.materialized-tmp`
+  fs.rmSync(tempDir, { recursive: true, force: true })
+  fs.cpSync(dependencySource, tempDir, { recursive: true })
+  fs.rmSync(topLevelDependencyDir, { recursive: true, force: true })
+  fs.renameSync(tempDir, topLevelDependencyDir)
+  console.log(`[before-pack] Materialized ${dependencyPackageName} for packaging`)
+}
+
+function ensureTopLevelRuntimeDependency(rootDir, dependencyPackageName) {
+  const topLevelDependencyDir = path.join(rootDir, 'node_modules', dependencyPackageName)
+  if (fs.existsSync(topLevelDependencyDir)) {
+    materializeTopLevelRuntimeDependency(rootDir, dependencyPackageName)
+    return
+  }
+
+  const dependencySource = findPnpmPackageDir(rootDir, dependencyPackageName)
+  if (!dependencySource) {
+    return
+  }
+
+  fs.cpSync(dependencySource, topLevelDependencyDir, { recursive: true })
+  console.log(`[before-pack] Copied ${dependencyPackageName} to top-level node_modules for packaging`)
+}
+
+function embedRuntimeDependency(rootDir, consumerPackageName, consumerRelativeFile, dependencyPackageName) {
+  const virtualStoreDir = path.join(rootDir, 'node_modules', '.pnpm')
+  if (!fs.existsSync(virtualStoreDir)) {
+    return
+  }
+
+  for (const entry of fs.readdirSync(virtualStoreDir)) {
+    if (!entry.startsWith(`${consumerPackageName}@`)) {
+      continue
+    }
+
+    const consumerStoreDir = path.join(virtualStoreDir, entry, 'node_modules')
+    const dependencyLink = path.join(consumerStoreDir, dependencyPackageName)
+    const consumerPackageDir = path.join(consumerStoreDir, consumerPackageName)
+    const consumerFile = path.join(consumerPackageDir, consumerRelativeFile)
+    if (!fs.existsSync(dependencyLink) || !fs.existsSync(consumerFile)) {
+      continue
+    }
+
+    const dependencySource = fs.realpathSync(dependencyLink)
+    const embeddedDir = path.join(path.dirname(consumerFile), dependencyPackageName)
+    fs.rmSync(embeddedDir, { recursive: true, force: true })
+    fs.cpSync(dependencySource, embeddedDir, { recursive: true })
+    if (dependencyPackageName === 'iconv-lite') {
+      nestRuntimeDependencyIntoPackage(rootDir, embeddedDir, 'safer-buffer')
+    }
+
+    const original = fs.readFileSync(consumerFile, 'utf-8')
+    const patched = original.replace(/require\((['"])iconv-lite\1\)/g, 'require("./iconv-lite")')
+    if (patched !== original) {
+      fs.writeFileSync(consumerFile, patched)
+    }
+    console.log(`[before-pack] Embedded ${dependencyPackageName} into ${consumerPackageName}/${consumerRelativeFile}`)
+  }
+}
+
+function ensureIconvLiteRuntimeDependencies(rootDir) {
+  // electron-builder can miss pnpm's iconv-lite junction while packaging jsdom/Express transitive deps.
+  materializeTopLevelRuntimeDependency(rootDir, 'safer-buffer')
+  materializeTopLevelRuntimeDependency(rootDir, 'iconv-lite')
+  nestRuntimeDependencyIntoPackage(rootDir, path.join(rootDir, 'node_modules', 'iconv-lite'), 'safer-buffer')
+  for (const consumerPackageName of ['whatwg-encoding', 'encoding', 'body-parser', 'raw-body']) {
+    copyNestedRuntimeDependency(rootDir, consumerPackageName, 'iconv-lite')
+  }
+  embedRuntimeDependency(rootDir, 'whatwg-encoding', path.join('lib', 'whatwg-encoding.js'), 'iconv-lite')
+  embedRuntimeDependency(rootDir, 'encoding', path.join('lib', 'encoding.js'), 'iconv-lite')
+  embedRuntimeDependency(rootDir, 'body-parser', path.join('lib', 'read.js'), 'iconv-lite')
+  embedRuntimeDependency(rootDir, 'raw-body', 'index.js', 'iconv-lite')
+}
+
+function ensureWhatwgUrlRuntimeDependencies(rootDir) {
+  // whatwg-url requires these packages by name at runtime; make pnpm's nested junctions real before asar packing.
+  materializeTopLevelRuntimeDependency(rootDir, 'punycode')
+  materializeTopLevelRuntimeDependency(rootDir, 'tr46')
+  materializeTopLevelRuntimeDependency(rootDir, 'webidl-conversions')
+  nestRuntimeDependencyIntoPackage(rootDir, path.join(rootDir, 'node_modules', 'tr46'), 'punycode')
+  copyNestedRuntimeDependency(rootDir, 'tr46', 'punycode')
+  copyNestedRuntimeDependency(rootDir, 'whatwg-url', 'tr46')
+  copyNestedRuntimeDependency(rootDir, 'whatwg-url', 'webidl-conversions')
+}
+
+function ensureExpressRuntimeDependencies(rootDir) {
+  // electron-builder can miss pnpm-only transitive links in the Express runtime chain.
+  for (const dependencyName of expressRuntimeDependencies) {
+    ensureTopLevelRuntimeDependency(rootDir, dependencyName)
+  }
+  copyNestedRuntimeDependency(rootDir, 'on-finished', 'ee-first')
+}
+
 exports.default = async function (context) {
   const arch = context.arch === Arch.arm64 ? 'arm64' : 'x64'
   const platformName = context.packager.platform.name
   const platform = platformToArch[platformName]
+
+  ensureIconvLiteRuntimeDependencies(path.join(__dirname, '..'))
+  ensureWhatwgUrlRuntimeDependencies(path.join(__dirname, '..'))
+  ensureExpressRuntimeDependencies(path.join(__dirname, '..'))
 
   // Download rtk binary for the target platform
   try {

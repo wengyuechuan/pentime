@@ -3245,7 +3245,9 @@
       "auto": "自动",
       "high": "高",
       "low": "低",
-      "medium": "中"
+      "medium": "中",
+      "standard": "标准",
+      "hd": "高清"
     },
     "regenerate": {
       "confirm": "这将覆盖已生成的图片，是否继续？"
@@ -6063,6 +6065,12 @@
       "cancelled": "已取消生成",
       "create_failed": "创建视频任务失败",
       "fetch_content_failed": "获取视频内容失败",
+      "invalid_reference_url": "参考视频或音频链接必须以 http:// 或 https:// 开头",
+      "missing_first_frame": "请先上传首图",
+      "missing_last_frame": "请先上传尾图",
+      "missing_reference_image": "请至少上传一张参考图",
+      "missing_reference_material": "请至少上传参考图，或填写参考视频/音频链接",
+      "missing_reference_video": "当前 seed vision 模型必须填写至少一个参考视频链接",
       "no_task_id": "接口没有返回任务 ID",
       "no_video_url": "接口没有返回可播放的视频地址",
       "task_failed": "视频任务失败",
@@ -6079,8 +6087,19 @@
     "no_provider": "暂无可用 Pen time 服务商",
     "no_video_model": "暂无可用的视频生成模型，请先启用 Pen time 服务商、填写 API Key，并添加端点类型为视频生成的模型",
     "prompt_placeholder": "描述你想生成的视频画面、镜头运动和风格...",
+    "reference_audio_urls": "参考音频链接",
+    "reference_image": "参考图",
+    "reference_images": "参考图",
+    "reference_url_placeholder": "每行一个 http(s) 链接，也可以用逗号分隔",
+    "reference_video_urls": "参考视频链接",
     "resolution": "分辨率",
     "seconds": "秒",
+    "seed_mode": "生成模式",
+    "seed_mode_first_frame": "首帧-图生视频",
+    "seed_mode_first_last_frame": "首尾帧-图生视频",
+    "seed_mode_multimodal_reference": "多模态-参考生视频",
+    "seed_mode_reference_images": "参考图-图生视频",
+    "seed_mode_text": "文生视频",
     "status": {
       "completed": "已完成",
       "failed": "失败",
@@ -6089,7 +6108,8 @@
       "submitting": "正在提交"
     },
     "title": "视频",
-    "upload_frame": "上传图片"
+    "upload_frame": "上传图片",
+    "upload_reference_image": "上传参考图"
   },
   "warning": {
     "missing_provider": "供应商不存在，已回退到默认供应商 {{provider}}。这可能导致问题。"

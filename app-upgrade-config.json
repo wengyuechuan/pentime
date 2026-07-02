@@ -1,19 +1,19 @@
 {
-  "lastUpdated": "2026-06-10T00:00:00.000Z",
+  "lastUpdated": "2026-07-03T00:00:00.000Z",
   "versions": {
-    "1.9.9": {
+    "1.10.0": {
       "metadata": {
         "segmentId": "current-v1",
         "segmentType": "latest"
       },
       "minCompatibleVersion": "1.9.9",
-      "description": "Pen-Time current v1.x release",
+      "description": "Pen-Time 1.10.0 release",
       "channels": {
         "latest": {
-          "version": "1.9.9",
+          "version": "1.10.0",
           "feedUrls": {
-            "github": "https://pentime-new.com/pen-time/releases/v1.9.9",
-            "gitcode": "https://pentime-new.com/pen-time/releases/v1.9.9"
+            "github": "https://pentime-new.com/pen-time/releases/v1.10.0",
+            "gitcode": "https://pentime-new.com/pen-time/releases/v1.10.0"
           }
         },
         "rc": null,

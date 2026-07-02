@@ -36,6 +36,7 @@ import DianxinModelLogo from '@renderer/assets/images/models/dianxin.png'
 import DianxinModelLogoDark from '@renderer/assets/images/models/dianxin_dark.png'
 import DoubaoModelLogo from '@renderer/assets/images/models/doubao.png'
 import DoubaoModelLogoDark from '@renderer/assets/images/models/doubao_dark.png'
+import DoubaoMonoModelLogo from '@renderer/assets/images/models/doubao_mono.svg'
 import {
   default as EmbeddingModelLogo,
   default as EmbeddingModelLogoDark
@@ -201,6 +202,8 @@ export function getModelLogoById(modelId: string): string | undefined {
     palm: isLight ? PalmModelLogo : PalmModelLogoDark,
     step: isLight ? StepModelLogo : StepModelLogoDark,
     hailuo: isLight ? HailuoModelLogo : HailuoModelLogoDark,
+    '(^|[-_/\\s])seed-2(?:$|[-_/\\s])': DoubaoMonoModelLogo,
+    seedance: DoubaoMonoModelLogo,
     doubao: isLight ? DoubaoModelLogo : DoubaoModelLogoDark,
     seedream: isLight ? DoubaoModelLogo : DoubaoModelLogoDark,
     'ep-202': isLight ? DoubaoModelLogo : DoubaoModelLogoDark,

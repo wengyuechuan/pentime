@@ -136,6 +136,23 @@ export const NewApiModelsResponseSchema = z.object({
   object: z.string().optional()
 })
 
+export const NewApiPricingResponseSchema = z.object({
+  data: z.array(
+    z.looseObject({
+      model_name: z.string(),
+      description: z.string().optional(),
+      tags: z.string().optional(),
+      owner_by: z.string().optional(),
+      supported_endpoint_types: z
+        .array(z.string())
+        .nullable()
+        .optional()
+        .transform((v) => v ?? undefined)
+    })
+  ),
+  success: z.boolean().optional()
+})
+
 // === OVMS (OpenVINO Model Server) ===
 
 export const OVMSConfigResponseSchema = z.record(
